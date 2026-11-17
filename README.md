@@ -66,7 +66,13 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
 
 `config.json` の `workers.engines.claude` には次のフラグを付けている。
 
-- `--safe-mode`：CLAUDE.md・MCP・skills・hooks を読み込まない。親ディレクトリの情報がworkerに伝わらないようにするため。
+- `--model claude-opus-5-5`：workerのモデルを個人の設定（`~/.claude/settings.json`）に左右させないため。このモデルには Claude Code 2.1.280 以上が必要。端末の `claude`（2.1.260、自動更新オフ）では使えないので、`run-workers` は VS Code 拡張に同梱のCLIを PATH の先頭に置いて実行している（端末のCLIを更新すれば不要）。
+
+  ```sh
+  PATH="$(ls -d ~/.vscode-server/extensions/anthropic.claude-code-*-linux-x64/resources/native-binary | sort -V | tail -1):$PATH" \
+    .venv/bin/python -m thin.cli run-workers R0001 --engine claude
+  ```
+- `--safe-mode`：CLAUDE.md・MCP・skills・hooks・自動メモリを読み込まない。親ディレクトリの情報がworkerに伝わらないようにするため。workerと同じ構成で何も読み込まれないことは確認済み（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の8）。
 - `--permission-mode acceptEdits --permission-prompts none`：ファイル編集は許可する。許可リストにないコマンドは確認せずに拒否する。
 - `--allowedTools`：`python3 quickcheck.py` と `g++` だけを許可する。Aでseed0以外を走らせないため。
 - `--disallowedTools WebSearch WebFetch`：過去問のルールを守るため。
