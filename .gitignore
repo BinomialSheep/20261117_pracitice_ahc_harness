@@ -1,8 +1,8 @@
+# --- ahc_thin_harness v0.1.0 ---
 __pycache__/
 *.py[cod]
 .venv/
 .env
-config.json
 runs/
 best/
 artifacts/
@@ -10,3 +10,11 @@ problem/tools/target/
 problem/tools/*.exe
 problem/tools/__pycache__/
 .thin.lock
+
+# --- このリポジトリ固有 ---
+# config.json はこの問題専用の設定としてGit管理する（ハーネス既定の "config.json" 除外を外した）。
+# 公式ツールのビルド成果物。scripts/build_tools.sh で再生成する。
+.build/
+problem/tools/bin/
+# 公式 vis が実行ディレクトリに書き出すファイル
+vis.html

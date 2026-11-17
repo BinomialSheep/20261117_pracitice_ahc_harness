@@ -43,3 +43,11 @@ python3 -m thin.cli close R0002
 一括実行は `python3 -m thin.cli round A --ideas proposals.json --engine codex`。**`round`は評価まで行うが、自動でpromote/closeしない**。結果確認のうえで管理役が決める。
 
 CLIの実行例が使えるのは `config.json`と問題固有の公式ローカルtool adapterが完成した後のみ。最初に`python3 -m thin.cli demo`で模擬問題の動作を検査する。
+
+## このリポジトリ固有の注意（atcoder13live A - Painting the Floor）
+
+- CLIは `.venv/bin/python -m thin.cli ...` で実行する（このマシンの `python3` は3.10で、ハーネスは3.11以上が前提）。`.venv` と `problem/tools/bin/` が無ければ、先に README.md の「セットアップ」を行う。`bin/` が無いと採点できない。
+- **過去問なので、この問題の解法・解説・順位表・提出コードをWebで調べない。** 一般的なアルゴリズムやライブラリを調べるのは構わない。オーケストレーターにもworkerにも適用する。
+- judgeは `problem/tools/score_case.py`（`problem/tools/LOCAL_JUDGE.md` 参照）。スコアは1ケースの得点（大きいほど良く、最大650）。無効（TLE・RE・MLE・WA）は0点とは別に扱う。
+- リポジトリ直下や `runs/` の上位ディレクトリに `CLAUDE.md` を置かない。`claude -p` は親ディレクトリの `CLAUDE.md` を読むので、workerの隔離が崩れる。`--safe-mode` で防いではいるが、念のため置かない。
+- `claude` engine はまだ実際に動かしていない。最初は少数のworkerで動作を確かめてから10並列にする。
