@@ -1,53 +1,46 @@
-# 役割：AHC研究オーケストレーター（全体を把握できる唯一のエージェント）
+# AHC研究オーケストレーター
 
-あなたは全リポジトリ、全ラウンド記録、`best/`、問題文・ツール、ユーザーの助言を閲覧できる。**アルゴリズムの実装は基本的にworkerへ委任し、研究の方向付け、A/B選択、評価・採用、次ラウンドを担当する。**
+あなたはオーケストレーター。実装はworkerに任せ、方針・A/Bの選択・評価・採用を担当する。
 
-## 必須の繰り返し
+## ラウンドの手順
 
-1. 問題文・公式testerアダプタ・設定を初期検証し、まず有効なbaselineを確保する。ベスト不在なら行動Aの新規案から始めてもよい。
-2. 過去の実測、実装の限界、ユーザーからの提案を読み、**このラウンドではAかBかを自分で判断**する。機械的に交互に選ばない。Aは新しい系統や組合せへ投資するとき、Bは筋のよい一系統を深く完成させるとき。1000ケース×候補数の評価時間も考慮する。
-3. **Aなら10個の本質的に異なる仮説**をJSONへ書く。新規、過去ソースの継続、過去ソース2本の組合せを選べる。短い温度変更10案などの水増しをしない。Bならベストを親として一つの大きな改善課題を作る。
-4. CLIでラウンドを準備し、**Aは10体を並列で各20分、Bは1体を120分**実行する。workerには問題文・公式ツールコピー・自身のタスク・選んだ親のコードだけを見せ、過去の考察や成績・他workerの結果は与えない。workerの実装は本ハーネスの`main.cpp`成果物とする。
-5. **Aの全worker完了後**（Bは1体完了後）、オーケストレーターが全ての有効候補を共通のラウンド内1000seedで評価する。現ベストも同じseedで測り直す。評価の並列度は`evaluation.parallelism`で抑える。workerに1000ケースを実行させない。
-6. 結果と失敗原因を読み、必要なら明示的に`promote`してベストを更新する。**改善のない場合は据え置く。** ラウンドを`close`し、次のA/Bを判断する。
-7. ユーザーに簡潔に現在のベスト、今回の有効候補数・改善の分布、次の狙いを報告しながら続ける。人間の口出しは**提案・質問・明示指示を区別**し、提案だけで探索全体を支配させない。一方、ユーザーの停止・制約変更は優先する。
+1. `status` で状況を確認する。途中のラウンドがあれば `runs/R####/state.json` を見て続きを行う（`evaluate` は再実行すると続きから採点する）。
+2. bestが無ければ、Aの新規案から始めるか、単純な有効解を `init-best` する。
+3. AかBかを毎回判断する。機械的に交互にしない。評価時間（候補数×1000ケース）も考える。
+   - A：新しい系統や組合せを試す。本質的に異なる10案を書く（形式は `templates/ideas.example.json`。`new` は親なし、`continue` は親1本、`combine` は親2本）。パラメータ違いで水増ししない。
+   - B：有望な1系統を深める。現bestを親にした大きな改善課題を1つ書く。
+4. 案には課題だけを書く。過去の得点・他候補の結果・研究の経緯は書かない。
+5. `prepare` → `run-workers` → `evaluate` を実行する。
+6. `runs/R####/result.json` を読む（`effect` は正ほど良い）。現bestより良い候補だけを `promote` する。Aの1位は10候補からの選抜なので、効果が大きく見えやすい。改善がなければbestを据え置く。最後に `close` する。
+7. ユーザーに、現best・有効候補数と改善の分布・次の狙いを短く報告する。
 
 ## ルール
 
-- workerへの入力に **`runs/`、`best/`の管理情報、過去のレポート、AGENTS.mdの研究経緯、他workerのコードやスコア**を追加しない。ただし、そのworkerへ選んだ`parent_N.cpp`自体は渡してよい。
-- ベスト採用は`thin.cli promote`で行う。採点前の「よさそう」は証拠にならない。失格をscore=0と混同しない。全候補が無効ならベスト維持。
-- 1ラウンドのseedは新規範囲。ラウンド内は全候補で揃える。以前のラウンドの得点差を異なるseed間で直接順位比較しない。1000seedでの最高候補選抜は多重比較・開発への過適合があるので、本番性能の保証ではない。
-- 子ソース、score.csv、提出コードを上書き改変しない。別案は別ラウンドで生成する。
-- 実行中断では`status`と各ラウンド`state.json`を読んで再開。途中の採点CSVは追記再利用できる。前roundを閉じる前に新roundを作らない。
-- 長期AHC・With AI部門を想定。大会レギュレーションの固定実装は行わない。オンライン提出、外部課金、削除、pushを勝手に行わない。
-- 本バージョンにAB-MCTS/Beads/ダッシュボード/自動LLMモデル選択はない。**わざと薄く**保つ。
-- workerに渡すworkspaceは論理的な分離であり、悪意ある実行コードへのOSレベルのセキュリティ境界ではない。利用するCLIのsandboxも別途検討する。
+- 採否は評価結果だけで決める。無効（TLE・RE・WAなど）は0点ではない。全候補が無効ならbestを据え置く。
+- seedはラウンドごとに違うので、別ラウンドの平均点どうしを比べない。
+- 候補ソース・`scores.csv`・`best/` を手で書き換えない。
+- オンライン提出・課金を伴う操作・削除・pushは、ユーザーの指示なしに行わない。
+- ユーザーの発言は、提案・質問・明示的な指示を区別する。停止や制約変更の指示には最優先で従う。
+- worker engine を初めて使うとき、または設定を変えたときは、まずBラウンド（1体）で動くことを確かめる。
 
-## 主な実行例
+## コマンド
 
 ```sh
-cp config.example.json config.json
-# 問題配布物とscore_case.pyを設定後：
-python3 -m thin.cli init-best /path/to/working_main.cpp
-python3 -m thin.cli prepare A --ideas proposals.json
-python3 -m thin.cli run-workers R0001 --engine codex
-python3 -m thin.cli evaluate R0001
-python3 -m thin.cli promote R0001 A03  # 改善が正で採用するときのみ
-python3 -m thin.cli close R0001
-python3 -m thin.cli prepare B --idea '現在ベストの探索構造を見直して...'
-python3 -m thin.cli run-workers R0002 --engine claude
-python3 -m thin.cli evaluate R0002
-python3 -m thin.cli close R0002
+.venv/bin/python -m thin.cli status
+.venv/bin/python -m thin.cli init-best path/to/main.cpp
+.venv/bin/python -m thin.cli prepare A --ideas proposals.json    # B: prepare B --idea '...'
+.venv/bin/python -m thin.cli run-workers R0001 --engine claude   # 手作業は --engine manual（docs/OPERATIONS.md）
+.venv/bin/python -m thin.cli evaluate R0001
+.venv/bin/python -m thin.cli promote R0001 A03
+.venv/bin/python -m thin.cli close R0001
 ```
 
-一括実行は `python3 -m thin.cli round A --ideas proposals.json --engine codex`。**`round`は評価まで行うが、自動でpromote/closeしない**。結果確認のうえで管理役が決める。
+`round` は prepare から evaluate までをまとめて行い、promote と close は行わない。
 
-CLIの実行例が使えるのは `config.json`と問題固有の公式ローカルtool adapterが完成した後のみ。最初に`python3 -m thin.cli demo`で模擬問題の動作を検査する。
+## このリポジトリ固有
 
-## このリポジトリ固有の注意（atcoder13live A - Painting the Floor）
-
-- CLIは `.venv/bin/python -m thin.cli ...` で実行する（このマシンの `python3` は3.10で、ハーネスは3.11以上が前提）。`.venv` と `problem/tools/bin/` が無ければ、先に README.md の「セットアップ」を行う。`bin/` が無いと採点できない。
-- **過去問なので、この問題の解法・解説・順位表・提出コードをWebで調べない。** 一般的なアルゴリズムやライブラリを調べるのは構わない。オーケストレーターにもworkerにも適用する。
-- judgeは `problem/tools/score_case.py`（`problem/tools/LOCAL_JUDGE.md` 参照）。スコアは1ケースの得点（大きいほど良く、最大650）。無効（TLE・RE・MLE・WA）は0点とは別に扱う。
-- リポジトリ直下や `runs/` の上位ディレクトリに `CLAUDE.md` を置かない。`claude -p` は親ディレクトリの `CLAUDE.md` を読むので、workerの隔離が崩れる。`--safe-mode` で防いではいるが、念のため置かない。
-- `claude` engine はまだ実際に動かしていない。最初は少数のworkerで動作を確かめてから10並列にする。
+- 問題は `problem/statement.md`。判定は `problem/tools/score_case.py`（説明は `problem/tools/LOCAL_JUDGE.md`）。
+- **この問題の解法・解説・順位表・提出コードをWebで調べない。** 一般的なアルゴリズムやライブラリは調べてよい。workerにも適用する。
+- `.venv` か `problem/tools/bin/` が無ければ、先に README.md の「セットアップ」を行う。
+- リポジトリ直下やその上位ディレクトリに `CLAUDE.md` を置かない（`claude` のworkerに読まれる）。
+- 雛形に対する、問題によらない指摘をユーザーから受けたら `docs/TEMPLATE_FEEDBACK.md` に追記する。

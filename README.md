@@ -22,7 +22,7 @@ https://atcoder.jp/contests/atcoder13live
 
 | パス | 内容 |
 |---|---|
-| `AGENTS.md` | オーケストレーター向けの指示（ハーネス）。末尾にこのリポジトリ固有の注意を追記 |
+| `AGENTS.md` | オーケストレーター向けの指示。毎回読み込まれるので、行動に必要なことだけを書く |
 | `HARNESS.md` | ハーネスのREADME（配布物の `README.md` を改名） |
 | `config.json` | この問題用の設定（Git管理する） |
 | `problem/statement.md` | 問題文。`問題文.html` から変換し、末尾にローカル評価の付記を加えた |
@@ -31,7 +31,8 @@ https://atcoder.jp/contests/atcoder13live
 | `problem/tools/bin/` | 公式ツールのビルド済みバイナリ（Git管理外、`scripts/build_tools.sh` で生成） |
 | `scripts/build_tools.sh` | 公式ツールをビルドして `problem/tools/bin/` に置く |
 | `tests/test_problem.py` | judgeアダプタとハーネス接続のテスト |
-| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/`, `examples/`, `templates/` | ハーネス本体（無改変） |
+| `docs/TEMPLATE_FEEDBACK.md` | 雛形作成担当に渡す、問題によらないフィードバック |
+| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体（無改変） |
 | `FILE_MANIFEST.json` | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない |
 | `runs/`, `best/` | ラウンド実行時に作られる（Git管理外） |
 
@@ -74,7 +75,7 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
 
 ## 進め方
 
-[AGENTS.md](AGENTS.md) と [docs/SETUP.md](docs/SETUP.md) に沿って、オーケストレーターがA/Bラウンドを回す。概要は [HARNESS.md](HARNESS.md) を参照。
+オーケストレーターは [AGENTS.md](AGENTS.md) に沿ってA/Bラウンドを回す。ハーネスの全体像は [HARNESS.md](HARNESS.md)、細かい運用は [docs/OPERATIONS.md](docs/OPERATIONS.md) にある。
 
 ```sh
 .venv/bin/python -m thin.cli status
