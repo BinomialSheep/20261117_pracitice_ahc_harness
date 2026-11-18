@@ -109,6 +109,7 @@ def _task_text(mode,job,deadline_minutes,debug_seeds):
 ## 実行予算と禁止事項
 - このworkerの上限は **{deadline_minutes:g}分**。時間を使い切る必要はない。
 - **{seed_info}での動作確認のみ**。`python3 quickcheck.py --seed 0` が用意されている。許可seed: {debug_seeds}。
+- 採点は `quickcheck.py` だけで行う。公式ツール（`problem/tools/` の gen・tester・vis・score_case.py）や `problem/tools/in/` の入力を直接使って、許可seed以外を試さない。
 - **1000ケースの性能評価、大量のシード生成、並列ベンチ、長時間学習はしない**。それらは全worker完了後にオーケストレーターが順番・同条件で実施する。
 - 他workerや親プロジェクトのファイルは変更せず、このworkspaceの中だけを編集する。
 - 公式ツールのコピーは試験用。提出ソースは一つの `main.cpp` とする。

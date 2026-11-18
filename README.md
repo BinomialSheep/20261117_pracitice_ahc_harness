@@ -30,9 +30,10 @@ https://atcoder.jp/contests/atcoder13live
 | `problem/tools/` | 公式ツール一式、judgeアダプタ `score_case.py`、説明 `LOCAL_JUDGE.md` |
 | `problem/tools/bin/` | 公式ツールのビルド済みバイナリ（Git管理外、`scripts/build_tools.sh` で生成） |
 | `scripts/build_tools.sh` | 公式ツールをビルドして `problem/tools/bin/` に置く |
+| `scripts/codex_limits.py`, `scripts/codex_audit.py` | Codex の利用上限を読む／codex worker の行動を監査する |
 | `tests/test_problem.py` | judgeアダプタとハーネス接続のテスト |
 | `docs/TEMPLATE_FEEDBACK.md` | 雛形作成担当に渡す、問題によらないフィードバック |
-| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` だけ変更した（R0003から） |
+| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から） |
 | `FILE_MANIFEST.json` | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない |
 | `runs/`, `best/` | ラウンド実行時に作られる（Git管理外） |
 
@@ -78,7 +79,29 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
 - `--allowedTools`：`python3 quickcheck.py` と `g++` だけを許可する。Aでseed0以外を走らせないため。
 - `--disallowedTools WebSearch WebFetch`：過去問のルールを守るため。
 
-R0001（Bラウンド1体）で動作を確かめ、R0002から10並列のAも使っている。サブスクの利用上限に注意する（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の9）。`codex` はこのマシンに入っていない。
+R0001（Bラウンド1体）で動作を確かめ、R0002から10並列のAも使っている。サブスクの利用上限に注意する（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の9）。
+
+`workers.engines.codex`（Codex CLI 0.169.1、ChatGPTのPlusプランでログイン）には次のフラグを付けている。R0006から使う。
+
+- `--ignore-user-config`：個人の `~/.codex/config.toml` を読まない。認証はそのまま使える。
+- `-m gpt-6.2-sol`、`-c model_reasoning_effort="high"`：モデルとeffortを固定する。不正な値は終了コード1で止まる。
+- `-c web_search="disabled"` と `--disable apps plugins remote_plugin browser_use browser_use_external in_app_browser`（実際は1つずつ `--disable` を付ける）：Webに届く道具を外す。`web_search` を切るだけでは、ChatGPTの連携アプリ（`codex_apps` のMCP）の検索で調べられた。全部付けると、モデルは「Webの道具が無い」と答えた。
+- `--disable multi_agent`：効果は確かめていない。セッション記録のツール一覧には `spawn_agent` などが残った。
+- `--sandbox workspace-write`：書き込めるのは workspace と `/tmp` だけで、ネットワークも使えない（`codex sandbox` で確認済み）。読み取りはディスク全体でできる。
+- `--ephemeral`：セッション記録を残さない。
+- `--json`：行動のイベント列を `agent.stdout` に残す。
+
+worker と同じ形（`git init` した workspace）では、リポジトリの `AGENTS.md` は渡らない。リポジトリ直下から起動すると渡る。どちらもセッション記録（`~/.codex/sessions`）で確認した。
+
+claude の `--allowedTools` に当たるコマンド制限は無い。seed0だけ（A）という制限は task.md の指示だけなので、`run-workers` のあとに監査する。
+
+```sh
+python3 scripts/codex_audit.py R0006             # 終了状態・エラー・トークン・許可外seedや公式ツールの直接実行など
+python3 scripts/codex_audit.py R0006 --commands  # 全コマンドも表示
+python3 scripts/codex_limits.py                  # 5時間枠と週間枠の使用率（読み取りだけ）
+```
+
+`codex_limits.py` は `codex app-server` に読み取りのメソッドしか送らない。リセット権を消費するメソッドは送れないようにしてある。
 
 ## 進め方
 

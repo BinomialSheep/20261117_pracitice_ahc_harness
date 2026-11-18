@@ -95,3 +95,21 @@ ahc_thin_harness の雛形作成担当に渡す、問題によらない指摘の
 - 起きたこと：engine の argv に `--effort` が無かった。そのため worker の effort は、ユーザー設定（ここでは `~/.claude/settings.json` の `modelSettings` に、`claude-opus-5-5` の `effortLevel: xhigh`）に左右されうる。`--safe-mode` のもとでこの設定が効くかは確かめていない。effort が高いと、worker 1体あたりの消費が増え、9の利用上限に早く達する。
 - 次の雛形で：`--model` と同じく `--effort` も engine の argv に明示する。worker の消費は「並列数×時間×effort」で決まるので、利用上限のあるプランで A と B の effort をどう選ぶかを docs に書く。
 - このリポジトリでは：R0003 から `--effort high` を明示した。
+
+## 11. `codex` engine の既定値では Web を調べられ、seed の制限も効かない（Codex への切り替えで判明）
+
+- 起きたこと：雛形の argv（`codex exec --sandbox workspace-write --cd {workspace} -`）を、Codex CLI 0.169.1（ChatGPTのPlusプラン）で確かめた。
+  - モデルと effort が個人の `~/.codex/config.toml` で決まる（10と同じ問題）。
+  - 既定では組み込みの `web_search` が使える。`-c web_search="disabled"` を付けても、ChatGPTの連携アプリ（`codex_apps` のMCPにある `search_service.web_run`）で検索できた。`--ignore-user-config` と、`apps`・`plugins`・`browser_use` などの機能の `--disable` を合わせると、Webの道具は無くなった。サンドボックスのネットワーク遮断は、モデル側の検索ツールには効かない。
+  - claude の `--allowedTools` に当たるコマンドの許可リストが無い。workspace には公式ツールがあるので、A の「seed0だけ」は task.md の指示でしか守らせられない。
+  - `workspace-write` のサンドボックスが止めるのは書き込みとネットワークだけで、読み取りはディスク全体でできる（過去の `runs/` も読める）。
+  - worker に何が渡ったかは、セッション記録（`~/.codex/sessions/**/rollout-*.jsonl`）で確かめられる。渡った指示文（`AGENTS.md` を含む）とツール一覧が残るので、8のようにモデルの自己申告に頼らなくてよい。
+  - 利用上限（5時間枠と週間枠）は、`codex app-server` の `account/rateLimits/read` で読める。同じプロトコルにはリセット権を消費するメソッドもあるので、読み取りのメソッドだけを許可リストで送る。
+- 次の雛形で：
+  - codex の argv 例に、モデル・effort・`--ignore-user-config`・Webに届く機能の無効化・`--json` を入れる。
+  - コマンドを制限できない engine には、`--json` のイベント列から許可外の seed、公式ツールの直接実行、workspace 外の参照を洗い出す監査スクリプトを付ける。
+  - engine を初めて使うときの確認手順（Webの道具が無いこと、指示ファイルが渡らないこと、サンドボックスの範囲）を、セッション記録とサンドボックスの直接実行で確かめる形で docs に載せる。
+  - 利用上限を読む読み取り専用のスクリプトを入れ、ラウンドの前後で確かめる手順にする。
+- このリポジトリでは：`config.json` の codex engine に上記のフラグを付け、`scripts/codex_audit.py` と `scripts/codex_limits.py` を追加した。R0006（Bラウンド1体、gpt-6.2-sol・effort high）で動作を確かめた。
+  - worker は59分で完走し、有効な候補を提出した。Plusプランの使用率は、5時間枠が19ポイント、週間枠が3ポイント増えた。
+  - 監査では、Web・MCP の利用も workspace 外の参照も無かった。ただし quickcheck を通さず `score_case.py` を直接呼んで、seed 0〜9 を採点していた（Bの許可範囲内）。task.md に「採点は quickcheck.py だけで行う」とは書いていなかったので、R0007から1行足した。

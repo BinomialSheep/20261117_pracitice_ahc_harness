@@ -33,7 +33,11 @@
                  "--permission-mode", "acceptEdits", "--permission-prompts", "none",
                  "--disallowedTools", "WebSearch", "WebFetch",
                  "--allowedTools", "Bash(python3 quickcheck.py)", "Bash(python3 quickcheck.py *)", "Bash(g++ *)"],
-      "codex": ["codex", "exec", "--sandbox", "workspace-write", "--cd", "{workspace}", "-"]
+      "codex": ["codex", "exec", "--ignore-user-config", "-m", "gpt-6.2-sol", "-c", "model_reasoning_effort=\"high\"",
+                "-c", "web_search=\"disabled\"", "--disable", "apps", "--disable", "plugins", "--disable", "remote_plugin",
+                "--disable", "browser_use", "--disable", "browser_use_external", "--disable", "in_app_browser",
+                "--disable", "multi_agent", "--sandbox", "workspace-write", "--ephemeral", "--json",
+                "--cd", "{workspace}", "-"]
     }
   }
 }
