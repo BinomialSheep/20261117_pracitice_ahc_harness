@@ -113,3 +113,16 @@ ahc_thin_harness の雛形作成担当に渡す、問題によらない指摘の
 - このリポジトリでは：`config.json` の codex engine に上記のフラグを付け、`scripts/codex_audit.py` と `scripts/codex_limits.py` を追加した。R0006（Bラウンド1体、gpt-6.2-sol・effort high）で動作を確かめた。
   - worker は59分で完走し、有効な候補を提出した。Plusプランの使用率は、5時間枠が19ポイント、週間枠が3ポイント増えた。
   - 監査では、Web・MCP の利用も workspace 外の参照も無かった。ただし quickcheck を通さず `score_case.py` を直接呼んで、seed 0〜9 を採点していた（Bの許可範囲内）。task.md に「採点は quickcheck.py だけで行う」とは書いていなかったので、R0007から1行足した。
+
+## 12. worker の engine として claude と codex を使い分けられるようにする（ユーザー指摘）
+
+- 起きたこと：雛形には `claude` と `codex` の両方の argv 例があるが、どちらも実機では確かめられていなかった（5・11）。このリポジトリは claude だけで始めて、サブスクの利用上限に当たった（9）。そこで codex も使えるように整えた（11）。今後は両方を使い分けたい。
+  - engine はラウンド単位でしか選べない（`run-workers --engine`）。A の10体は、すべて同じ engine で動く。
+  - どの engine で動かしたかは、`run-workers` の直後の `state.json` にしか書かれない。`evaluate` と `close` でこのファイルが上書きされるので、ラウンドを閉じると記録が消える。`job.json` と `result.json` には engine の欄が無い。
+- 次の雛形で：
+  - claude と codex を対等に扱う。どちらにも、実機で確かめた argv 例（モデルと effort の固定、Webの無効化、隔離）と、初めて使うときの確認手順を付ける。
+  - engine ごとの違いを docs に表でまとめる。項目は、コマンドの許可リストの有無（claude にはあり、codex には無いので監査が要る）、読み込まれる指示ファイルと隔離のしかた、Webの道具を外すフラグ、ログの形式、利用上限の読み方。
+  - 候補ごとに、使った engine・モデル・effort を `job.json` と `result.json` に記録する。engine による違いを、結果と結びつけて振り返れるようにする。
+  - 1つのラウンドの worker を engine ごとに振り分けられるようにする（例：A の10体を claude と codex に5体ずつ）。利用上限を2つのサブスクに分けられ、片方が上限に達してもラウンドが止まらない。
+  - ラウンドの前に、各 engine の利用上限の残りを確かめてから engine と並列数を決めるよう、AGENTS.md に1行入れる。
+- このリポジトリでは：codex engine を整え（11）、R0006 から `run-workers --engine codex` で使えるようにした。1つのラウンドで engine を混ぜることと、候補ごとの engine の記録はまだできない。
