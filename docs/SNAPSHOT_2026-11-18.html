@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ハーネスと解法のスナップショット</title>
+<style>
+:root {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --surface-2: #f3f1ec;
+  --text: #1f2328;
+  --muted: #5d636b;
+  --border: #dcd8cf;
+  --accent: #2f5fa7;
+  --accent-soft: #e5ecf7;
+  --good: #1f7a4d;
+  --good-soft: #e3f2ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbefdc;
+  --bad: #b03a2e;
+  --bad-soft: #f8e4e1;
+  --p1: #2f5fa7;
+  --p2: #7a5ab8;
+  --p3: #1f7a4d;
+  --p4: #b5762a;
+  --p5: #8a8f96;
+  --code-bg: #f1efe9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a;
+    --surface: #1d2024;
+    --surface-2: #24282d;
+    --text: #e6e8eb;
+    --muted: #a0a7b0;
+    --border: #363b42;
+    --accent: #7fa8e8;
+    --accent-soft: #23324a;
+    --good: #6cc495;
+    --good-soft: #1c3528;
+    --warn: #e0a85a;
+    --warn-soft: #3a2d18;
+    --bad: #ec8a7e;
+    --bad-soft: #3d2220;
+    --p1: #6f9be0;
+    --p2: #a68ae0;
+    --p3: #5fb98a;
+    --p4: #d49a52;
+    --p5: #7d838b;
+    --code-bg: #262a30;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171a;
+  --surface: #1d2024;
+  --surface-2: #24282d;
+  --text: #e6e8eb;
+  --muted: #a0a7b0;
+  --border: #363b42;
+  --accent: #7fa8e8;
+  --accent-soft: #23324a;
+  --good: #6cc495;
+  --good-soft: #1c3528;
+  --warn: #e0a85a;
+  --warn-soft: #3a2d18;
+  --bad: #ec8a7e;
+  --bad-soft: #3d2220;
+  --p1: #6f9be0;
+  --p2: #a68ae0;
+  --p3: #5fb98a;
+  --p4: #d49a52;
+  --p5: #7d838b;
+  --code-bg: #262a30;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+main { max-width: 940px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 1.7rem; line-height: 1.35; margin: 0 0 6px; letter-spacing: .01em; }
+h2 {
+  font-size: 1.3rem; margin: 56px 0 14px; padding-bottom: 6px;
+  border-bottom: 2px solid var(--border);
+}
+h3 { font-size: 1.07rem; margin: 30px 0 8px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+code, pre, .mono { font-family: "SFMono-Regular", "Consolas", "Menlo", "Noto Sans Mono", monospace; font-size: .88em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre {
+  background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto;
+  line-height: 1.55; margin: 12px 0;
+}
+pre code { background: none; padding: 0; }
+ul, ol { padding-left: 1.4em; margin: 8px 0; }
+li { margin: 3px 0; }
+.lede { color: var(--muted); margin: 0 0 18px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: .88rem; }
+.toc {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 18px; margin: 22px 0 0;
+}
+.toc ol { margin: 4px 0; columns: 2; column-gap: 28px; }
+.toc li { break-inside: avoid; }
+@media (max-width: 640px) { .toc ol { columns: 1; } }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 22px 0 0; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.kpi .label { font-size: .8rem; color: var(--muted); }
+.kpi .value { font-size: 1.45rem; font-weight: 650; line-height: 1.3; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: .8rem; color: var(--muted); }
+
+.note {
+  border-left: 4px solid var(--accent); background: var(--accent-soft);
+  padding: 9px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+.note.warn { border-color: var(--warn); background: var(--warn-soft); }
+
+.table-wrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.nowrap { white-space: nowrap; }
+
+.chip {
+  display: inline-block; font-size: .78rem; padding: 0 8px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-2); white-space: nowrap; line-height: 1.7;
+}
+.chip.a { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.chip.good { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.chip.bad { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+.chip.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+
+/* round flow */
+.flow { list-style: none; padding: 0; margin: 16px 0; counter-reset: step; }
+.flow > li {
+  position: relative; margin: 0; padding: 0 0 14px 44px;
+}
+.flow > li::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; left: 0; top: 2px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: var(--bg); font-weight: 700; font-size: .85rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.flow > li::after {
+  content: ""; position: absolute; left: 13px; top: 32px; bottom: 2px; width: 2px; background: var(--border);
+}
+.flow > li:last-child::after { display: none; }
+.flow .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.flow .card h4 { margin: 0 0 2px; font-size: 1rem; }
+.flow .card p { margin: 4px 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.split > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; font-size: .92rem; }
+.split b { display: block; margin-bottom: 2px; }
+@media (max-width: 600px) { .split { grid-template-columns: 1fr; } }
+
+.phases { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+.phase { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; }
+.phase i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+.state .arrow { color: var(--muted); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.two > div { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.two h4 { margin: 0 0 4px; font-size: .98rem; }
+@media (max-width: 640px) { .two { grid-template-columns: 1fr; } }
+
+/* timeline */
+.timeline { margin: 16px 0 6px; }
+.tl-bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.tl-bar > div { height: 100%; }
+.tl-axis { position: relative; height: 22px; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-axis span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; }
+.tl-axis span:first-child { transform: none; }
+.tl-axis span:last-child { transform: translateX(-100%); }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 6px; }
+
+.formula { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin: 12px 0; }
+.formula pre { margin: 6px 0; background: var(--code-bg); }
+
+.tree { font-size: .86rem; }
+footer { margin-top: 60px; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--border); padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>ハーネスと解法のスナップショット</h1>
+  <p class="lede">atcoder13live A を題材にした With AI 練習リポジトリの、現時点の仕組みと解法をまとめた。問題文の説明は省く。</p>
+  <div class="meta">
+    <span>時点：2026-11-18（コミット <code>9480b29</code>）</span>
+    <span>ラウンド：R0001〜R0011（すべて close 済み）</span>
+    <span>ハーネス：ahc_thin_harness v0.1.0 を改変</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">現best</div>
+      <div class="value">R0011/A07</div>
+      <div class="sub">codex worker・A（continue）</div>
+    </div>
+    <div class="kpi">
+      <div class="label">現bestのローカル平均</div>
+      <div class="value">476.31</div>
+      <div class="sub">seed 11000〜11999。直前のbestとの差 +0.75</div>
+    </div>
+    <div class="kpi">
+      <div class="label">記録にある最新の公式提出</div>
+      <div class="value">47474</div>
+      <div class="sub">R0008/A06（100ケース合計）。1位は47492</div>
+    </div>
+    <div class="kpi">
+      <div class="label">これまでの評価</div>
+      <div class="value">11 ラウンド</div>
+      <div class="sub">A 7回・B 4回、採用 10回</div>
+    </div>
+  </div>
+
+  <nav class="toc" aria-label="目次">
+    <ol>
+      <li><a href="#overview">ハーネスの全体像</a></li>
+      <li><a href="#round">1ラウンドの流れ</a></li>
+      <li><a href="#worker">worker の隔離と engine</a></li>
+      <li><a href="#eval">評価と採用</a></li>
+      <li><a href="#judge">問題との接続</a></li>
+      <li><a href="#files">ファイル配置</a></li>
+      <li><a href="#local">雛形からの変更点</a></li>
+      <li><a href="#solver">解法：現best の構成</a></li>
+      <li><a href="#lineage">解法の系譜（R0001〜R0011）</a></li>
+      <li><a href="#outlook">知見と未解決の点</a></li>
+    </ol>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. ハーネスの全体像</h2>
+
+<p>オーケストレーター1体が全履歴を見て方針を決め、実装は履歴を知らない worker に任せる。worker の成果は、オーケストレーターが新しい1000 seedで現bestと並べて採点し、良ければ明示的に best へ昇格させる。これを1ラウンドとして繰り返す。</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>役</th><th>実体</th><th>見えるもの</th><th>すること</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="nowrap"><b>オーケストレーター</b></td>
+      <td>VS Code 上の Claude Code（<code>AGENTS.md</code> が指示書）</td>
+      <td>リポジトリ全体、全ラウンドの結果</td>
+      <td>A/Bの選択、案の作成、CLI の実行、採否の判断、ユーザーへの報告</td>
+    </tr>
+    <tr>
+      <td class="nowrap"><b>worker</b></td>
+      <td><code>claude -p</code> または <code>codex exec</code></td>
+      <td>自分の workspace だけ（課題・問題文・公式ツール・親ソース）</td>
+      <td><code>main.cpp</code> を書き、許可された debug seed で動作確認する</td>
+    </tr>
+    <tr>
+      <td class="nowrap"><b>評価器</b></td>
+      <td><code>thin.cli evaluate</code>（Python）</td>
+      <td>凍結した候補ソースと judge のスナップショット</td>
+      <td>コンパイル、seed0 の確認、1000 seed × (候補＋現best) の採点、比較</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>行動は2種類ある。毎ラウンド、オーケストレーターがどちらにするかを決める（機械的に交互にはしない）。</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th></th><th>A：広く試す</th><th>B：深く掘る</th></tr></thead>
+  <tbody>
+    <tr><td>案</td><td>本質的に異なる10案。<code>new</code>（親なし）・<code>continue</code>（親1本）・<code>combine</code>（親2本）</td><td>現bestを親にした大きな課題1つ</td></tr>
+    <tr><td>worker</td><td>10体並列、各20分まで</td><td>1体、120分まで</td></tr>
+    <tr><td>debug seed</td><td>0 だけ</td><td>0〜9</td></tr>
+    <tr><td>評価ケース</td><td>1000 × 10候補 ＋ 現best 1000</td><td>1000 × 1候補 ＋ 現best 1000</td></tr>
+    <tr><td>評価時間の目安</td><td>約27分（11000ケース）</td><td>約5分（2000ケース）</td></tr>
+    <tr><td>注意</td><td>1位は10本から選ぶので効果が大きく見えやすい</td><td>候補が1本なので選抜の偏りは小さい</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="round">2. 1ラウンドの流れ</h2>
+
+<ol class="flow">
+  <li><div class="card">
+    <h4>状況確認と A/B の選択</h4>
+    <p><code>status</code> で途中のラウンドが無いかを見る。案には課題だけを書き、過去の得点・他候補の結果・研究の経緯は書かない。</p>
+    <div class="split">
+      <div><b>A</b><code>prepare A --ideas proposals.json</code><br>10案の JSON（形式は <code>templates/ideas.example.json</code>）</div>
+      <div><b>B</b><code>prepare B --idea '...'</code><br>親は常に現best</div>
+    </div>
+  </div></li>
+  <li><div class="card">
+    <h4>prepare：ラウンドの固定</h4>
+    <p><code>runs/R####/</code> を作り、<code>plan.json</code> に設定・seed範囲・直前のbest・案を固定する。公式ツールと問題文を <code>judge_tools/</code> にコピーしてハッシュを取る。案ごとに workspace を作り、<code>git init</code> する。前のラウンドが close されていないと拒否する。</p>
+  </div></li>
+  <li><div class="card">
+    <h4>run-workers：実装</h4>
+    <p>engine の argv で worker を起動し、<code>task.md</code> を標準入力で渡す。時間切れのときはプロセスグループごと止める。終了時に workspace の <code>main.cpp</code> を <code>candidate.cpp</code> として凍結し、SHA-256 を記録する。手作業なら <code>--engine manual</code> と <code>submit</code>／<code>fail</code>／<code>workers-done</code> を使う。</p>
+  </div></li>
+  <li><div class="card">
+    <h4>evaluate：採点</h4>
+    <p>候補と現best を同じ1000 seedで採点し、<code>result.json</code> に効果（<code>effect</code>、正ほど良い）を書く。中断しても再実行すれば続きから採点する。</p>
+  </div></li>
+  <li><div class="card">
+    <h4>promote と close</h4>
+    <p>現bestより良い候補だけを <code>promote</code> する。前のbestは <code>best/history/</code> に残る。改善が無ければ据え置き、<code>close</code> で閉じる。</p>
+  </div></li>
+</ol>
+
+<p>ラウンドの状態は <code>state.json</code> の <code>phase</code> で管理する。<code>round</code> コマンドは prepare から evaluate までをまとめて行い、promote と close は行わない。</p>
+<div class="state">
+  <span class="chip a">prepared</span><span class="arrow">→</span>
+  <span class="chip a">workers_done</span><span class="arrow">→</span>
+  <span class="chip a">evaluated</span><span class="arrow">→</span>
+  <span class="chip a">closed</span>
+</div>
+<p>job ごとの状態は <code>pending → running → submitted → scored</code>。main.cpp が無ければ <code>worker_failed</code>、評価で無効なら <code>scoring_failed</code> になる。</p>
+
+<!-- ============================================================ -->
+<h2 id="worker">3. worker の隔離と engine</h2>
+
+<div class="two">
+  <div>
+    <h4>workspace に置くもの</h4>
+    <ul>
+      <li><code>task.md</code>：目的（案の本文）、入力、成果物、時間、禁止事項</li>
+      <li><code>AGENTS.md</code>：「課題は task.md」「外を読まない」の2行（R0009から）</li>
+      <li><code>problem/statement.md</code> と <code>problem/tools/</code> のコピー</li>
+      <li><code>parent_1.cpp</code>、<code>parent_2.cpp</code>（案に親があるときだけ）</li>
+      <li><code>quickcheck.py</code> と <code>worker_config.json</code></li>
+    </ul>
+  </div>
+  <div>
+    <h4>渡さないもの</h4>
+    <ul>
+      <li>過去ラウンドの結果・得点・経緯</li>
+      <li>他 worker の成果物</li>
+      <li>評価に使う seed の範囲</li>
+      <li>オーケストレーターの <code>AGENTS.md</code> と自動メモリ</li>
+    </ul>
+  </div>
+</div>
+
+<p><code>quickcheck.py</code> は、コンパイル→judge アダプタでの採点→得点の表示までを行い、許可外の seed を拒否する。task.md は「採点は quickcheck.py だけで行う」「1000ケースの評価や大量の seed 生成をしない」と指示する。</p>
+
+<h3>engine ごとの設定</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>項目</th><th>claude</th><th>codex</th></tr></thead>
+  <tbody>
+    <tr><td>モデル・effort</td><td><code>--model claude-opus-5-5 --effort high</code></td><td><code>-m gpt-6.2-sol</code>、<code>model_reasoning_effort="high"</code></td></tr>
+    <tr><td>個人設定・指示ファイルの遮断</td><td><code>--safe-mode</code>（CLAUDE.md・MCP・skills・hooks・自動メモリを読まない）と workspace の <code>git init</code></td><td><code>--ignore-user-config</code>、workspace の <code>AGENTS.md</code>、task.md の禁止文</td></tr>
+    <tr><td>Web の遮断</td><td><code>--disallowedTools WebSearch WebFetch</code></td><td><code>web_search="disabled"</code> と <code>--disable apps plugins remote_plugin browser_use ...</code></td></tr>
+    <tr><td>コマンドの制限</td><td><code>--allowedTools</code> で <code>python3 quickcheck.py</code> と <code>g++</code> だけ</td><td>無い。<code>scripts/codex_audit.py</code> で事後に監査する</td></tr>
+    <tr><td>サンドボックス</td><td><code>--permission-mode acceptEdits --permission-prompts none</code></td><td><code>--sandbox workspace-write</code>（書き込みとネットワークを制限。読み取りはディスク全体）</td></tr>
+    <tr><td>ログ</td><td><code>agent.stdout</code> にテキスト（usage は残らない）</td><td><code>--json</code> のイベント列</td></tr>
+    <tr><td>利用上限の確認</td><td>—</td><td><code>scripts/codex_limits.py</code>（読み取りだけ）</td></tr>
+    <tr><td>使ったラウンド</td><td>R0001〜R0005、R0007</td><td>R0006、R0008、R0009、R0011</td></tr>
+  </tbody>
+</table>
+</div>
+<p>R0010 は manual で、別に依頼した Codex の成果をオーケストレーターが <code>submit</code> した。claude の worker は、端末の CLI（2.1.260）では <code>claude-opus-5-5</code> を使えないので、VS Code 拡張に同梱の CLI を PATH の先頭に置いて起動している。</p>
+
+<!-- ============================================================ -->
+<h2 id="eval">4. 評価と採用</h2>
+
+<h3>同じ条件で比べる</h3>
+<ul>
+  <li><b>seed</b>：ラウンド r は seed <code>1000r</code>〜<code>1000r+999</code>。候補と現bestは必ず同じ seed 集合で比べる。ラウンドごとに seed が違うので、別ラウンドの平均点どうしは比べない。</li>
+  <li><b>負荷</b>：現bestと全候補のケースを1つの待ち行列に seed 順・候補順に交互に入れ、並列12で採点する。現bestも候補と同じ負荷で走る。</li>
+  <li><b>スナップショット</b>：judge は <code>runs/R####/judge_tools</code> の固定コピーを使う。worker が自分のツールを書き換えても採点に影響しない。</li>
+</ul>
+
+<h3>候補ごとの手順</h3>
+<ol>
+  <li>ソースのハッシュ・judge コマンド・seed 範囲を <code>source.json</code> に記録する（再開時に食い違えば止まる）。</li>
+  <li>コンパイルする。失敗なら <code>compile_error</code>。</li>
+  <li>オーケストレーター側で seed0 を採点する。worker の自己申告だけには頼らない。</li>
+  <li>1000ケースを採点し、<code>scores.csv</code> に seed 順で追記する。無効が出たらその候補の採点を打ち切る（<code>early_stop_on_invalid</code>）。</li>
+  <li>同じソース（SHA-256 が一致）は1回だけ採点し、結果を共有する。</li>
+</ol>
+
+<h3>比較と採否</h3>
+<div class="formula">
+  <pre><code>effect  = mean_seed( 候補の得点 − 現bestの得点 )      # paired_difference, maximize
+SE      = stdev / sqrt(n)、95%CI = effect ± 1.96 SE      # 探索的な目安
+better_cases / worse_cases = 差が正／負の seed 数</code></pre>
+</div>
+<ul>
+  <li>全1000ケースが有効な候補だけが採用できる。無効（TLE・RE・MLE・WA）は0点扱いではなく、候補ごと除外する。</li>
+  <li><code>promote</code> は <code>effect &gt; promotion_margin</code>（0.0）を満たし、ラウンド開始後に best が変わっていないときだけ通る。</li>
+  <li>A の1位は10本からの選抜なので、効果は過大に出やすい。新しいラウンドでは新しい seed で再び比べることになるので、ここで偏りの一部は洗い直される。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="judge">5. 問題との接続</h2>
+
+<p><code>config.json</code> の <code>judge.command</code> が1ケースのアダプタ <code>problem/tools/score_case.py</code> を呼ぶ。</p>
+<ol>
+  <li>公式 <code>bin/gen</code> で seed の入力を作る。</li>
+  <li>ソルバーを1回実行し、壁時計で2.0秒を超えたら TLE。RSS 1024 MiB 超は MLE。</li>
+  <li>公式 <code>bin/vis</code> で検証・採点する。</li>
+  <li>結果を JSON で書く。有効なら <code>{"status":"ok","valid":true,"score":…}</code>、無効なら <code>{"valid":false,"reason":"TLE: …"}</code>。</li>
+</ol>
+<p>ツールが無いなど環境側の失敗では JSON を書かずに非0で終わる。こうしてソルバーの無効と judge の故障を区別する。</p>
+<div class="table-wrap">
+<table>
+  <tbody>
+    <tr><th>コンパイル</th><td><code>g++ -std=gnu++23 -O2 -DONLINE_JUDGE -DATCODER</code>（<code>-DNDEBUG</code> なし、assert 有効、ACL なし）</td></tr>
+    <tr><th>スコア</th><td>1ケースの得点（最大650）を <code>maximize</code>・<code>paired_difference</code> で比較</td></tr>
+    <tr><th>時間</th><td>ソルバー内部の予算は約1.95秒（問題文の付記に記載）</td></tr>
+    <tr><th>公式ツール</th><td>Rust 製。<code>scripts/build_tools.sh</code> でビルドして <code>problem/tools/bin/</code>（Git 管理外）に置く</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="files">6. ファイル配置</h2>
+
+<pre class="tree"><code>AGENTS.md                  オーケストレーターの指示（毎回読まれるので行動指示だけ）
+config.json                この問題の設定（judge・評価・worker engine）
+thin/                      ハーネス本体
+  cli.py                     コマンド（status, prepare, run-workers, evaluate, promote, close, ...）
+  core.py                    ラウンド準備・worker 起動・凍結・close
+  scoring.py                 採点・比較・promote
+  config.py, process.py, util.py
+scripts/
+  quickcheck.py              worker 用の動作確認（各 workspace にコピーされる）
+  build_tools.sh             公式ツールのビルド
+  codex_audit.py             codex worker の行動監査
+  codex_limits.py            Codex の利用上限の読み取り
+  token_report.py            ラウンド別・発生源別のトークン集計（読み取りだけ）
+problem/
+  statement.md               問題文＋ローカル評価の付記
+  tools/score_case.py        1ケースの judge アダプタ（説明は LOCAL_JUDGE.md）
+docs/TEMPLATE_FEEDBACK.md  雛形作成者へのフィードバック（13件）
+tests/                     test_thin.py（ハーネス）、test_problem.py（アダプタ）
+
+best/                      ← Git 管理外
+  main.cpp, best.json        現best とその出自
+  history/                   昇格前の best
+runs/R####/                ← Git 管理外
+  plan.json                  ラウンドの固定条件（config・seed・案・best_before・ツールのハッシュ）
+  state.json                 phase
+  baseline.cpp               評価に使う直前の best
+  judge_tools/, judge_statement.md
+  jobs/A01/
+    job.json                 状態・案・親・SHA・agent の終了状態
+    workspace/               worker の作業場所
+    candidate.cpp            凍結した提出
+    agent.stdout / .stderr
+  evaluation/&lt;id&gt;/          source.json, compile.json, seed0.json, scores.csv
+  result.json                比較結果・推奨・promoted</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="local">7. 雛形からの変更点</h2>
+
+<p>v0.1.0 の雛形に、このリポジトリで次を加えた。問題によらない指摘は <code>docs/TEMPLATE_FEEDBACK.md</code> にまとめてある。</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>変更</th><th>理由</th><th>時期</th></tr></thead>
+  <tbody>
+    <tr><td><code>AGENTS.md</code> を行動指示だけに削った（6.2KB → 3.5KB）</td><td>毎回読み込まれるので、経緯や説明はトークンの無駄</td><td class="nowrap">開始時</td></tr>
+    <tr><td>claude engine に <code>--safe-mode</code>・<code>--allowedTools</code>・<code>--model</code>・<code>--effort</code> を指定</td><td>雛形の既定では worker がコンパイルできず、自動メモリが渡るおそれがあった。モデルと effort を個人設定に左右させない</td><td class="nowrap">R0001〜R0003</td></tr>
+    <tr><td>評価をケース単位で並列化し、現bestと候補を1つの待ち行列に混ぜた（並列12）</td><td>現bestだけ単独で走ると候補が不利。逐次では A の評価に約1時間かかった</td><td class="nowrap">R0003</td></tr>
+    <tr><td>codex engine の硬化フラグ、<code>codex_audit.py</code>、<code>codex_limits.py</code></td><td>既定では Web を調べられた。コマンドを制限できないので事後監査が要る</td><td class="nowrap">R0006</td></tr>
+    <tr><td>task.md に「採点は quickcheck.py だけで行う」</td><td>codex worker が <code>score_case.py</code> を直接呼んでいた</td><td class="nowrap">R0007</td></tr>
+    <tr><td>各 workspace に短い <code>AGENTS.md</code>、task.md に「外を読まない」</td><td>codex worker が親ディレクトリの <code>AGENTS.md</code> を探しにいき、2体がリポジトリ直下まで遡った</td><td class="nowrap">R0009</td></tr>
+    <tr><td><code>scripts/token_report.py</code></td><td>オーケストレーターと worker のトークン消費をラウンド別に見るため</td><td class="nowrap">R0011のあと</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="solver">8. 解法：現best の構成</h2>
+
+<p>現best（<code>best/main.cpp</code>、約2300行）は、<b>発射の列</b>を解の表現とし、ブロック巡回で作った多数の初期解を予選してから、4個体の集団で焼きなましつき大近傍探索（LNS）を回し、最後に厳密 DP とビームで仕上げる。全マスを塗り切る前提で、行動数 K を減らすことだけを狙う。</p>
+
+<h3>解の表現とコスト</h3>
+<p>解は <code>Fire{x, d, L}</code>（発射位置・方向・必要な長さ）の列である。発射の間は前計算した最短路で移動し、パワーが足りなければその場でパスして待つとみなす。こうすると、列から行動数とパワーの推移が一意に決まる（<code>RouteTrace</code>）。</p>
+<div class="formula">
+<pre><code>dist   = D[pos][x]                 # BFS で前計算した最短距離
+charge = max(dist, L − power)      # 移動数。足りない分はパスで補う
+cost  += charge + 1                # +1 は発射
+power  = (power + charge) / 2 + 1  # 発射後のパワー
+# 実際に塗る長さは min(power + charge, 壁までの距離)。余分に塗っても害はない</code></pre>
+</div>
+<p>この表現では「どこを・どの順で・どちら向きに撃つか」だけを探索すればよい。移動経路やパスの挿入は出力時に機械的に決まる。</p>
+
+<h3>時間配分</h3>
+<p>焼きなまし以降の区切りと局所の時間枠は、もともと1.75秒用だった。R0010 でこれらを 39/35 倍し、終了を1.95秒にした。前半の125msと245msは固定値である。</p>
+<div class="timeline" role="img" aria-label="0から1950ミリ秒までの時間配分。骨格生成0〜125、予選125〜245、集団焼きなまし245〜1605、ビーム仕上げ1605〜1928、DP仕上げと出力1928〜1950。">
+  <div class="tl-bar">
+    <div style="width:6.41%;background:var(--p1)"></div>
+    <div style="width:6.15%;background:var(--p2)"></div>
+    <div style="width:69.74%;background:var(--p3)"></div>
+    <div style="width:16.56%;background:var(--p4)"></div>
+    <div style="width:1.14%;background:var(--p5)"></div>
+  </div>
+  <div class="tl-axis">
+    <span style="left:0">0</span>
+    <span style="left:12.56%">245</span>
+    <span style="left:82.3%">1605</span>
+    <span style="left:100%">1950 ms</span>
+  </div>
+</div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>区間（ms）</th><th>段階</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td class="num">0〜125</td><td class="nowrap"><span class="sw" style="background:var(--p1)"></span>骨格の生成</td><td>ブロック巡回で初期解を大量に作り、修復と撃ち方DPを通して候補にする。全マスを塗れる解がまだ無ければ540msまで続ける。直後に上位12本を短く磨く（計18ms）</td></tr>
+    <tr><td class="num">〜245</td><td class="nowrap"><span class="sw" style="background:var(--p2)"></span>予選（3段）</td><td>候補を 40 → 16 → 6 本に絞る。各段で短い焼きなまし（140／330／580 ステップ、1本あたり 2／4／8 ms）をかけて順位を付け直す。94%以上同じ発射を持つ候補は重複として外す</td></tr>
+    <tr><td class="num">〜1605</td><td class="nowrap"><span class="sw" style="background:var(--p3)"></span>集団焼きなまし</td><td>4個体で LNS＋焼きなまし。個体間で領域を移植する交叉と、遅れた個体の再始動を挟む</td></tr>
+    <tr><td class="num">〜1928</td><td class="nowrap"><span class="sw" style="background:var(--p4)"></span>ビーム仕上げ</td><td>best と、best に近い個体に、連続する2〜11発の窓を選んでビームで置き直す近傍を繰り返す</td></tr>
+    <tr><td class="num">〜1950</td><td class="nowrap"><span class="sw" style="background:var(--p5)"></span>DP仕上げ・出力</td><td>撃ち方DPを改善が止まるまでかけ、全マスを塗り終えた以降の発射を切り捨てて出力する</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>骨格の生成：ブロック巡回</h3>
+<ul>
+  <li>盤面を 4×4＝16 ブロック（基本は 5×5）に分け、各ブロックを「1辺に沿って歩きながら内側へ撃つ」パスで塗る。パスは「どの辺に沿うか（4通り）× 歩く向き（2通り）」の8通りと、それぞれの塗り残しを1発で補った版で、ブロックごとに最大16通りある。</li>
+  <li>巡回順は、深さごとに (訪問済みブロック集合, 最後のパス) をラベルにした幅224のビームで決め、1回の呼び出しで最大5本の巡回を返す。評価は1/8行動単位で、塗り残しにペナルティを付ける。</li>
+  <li>呼び出しごとに分割を変えて多様性を出す。均等な5×5、一部の切れ目を±1ずらした分割、転置、縦の切れ目を壁の隣へ寄せた分割（<code>adjustCuts</code>）を周期的に使う。</li>
+  <li>巡回で塗り残したマスは <code>repair</code> で埋める。同じ発射列は重複として捨てる。</li>
+</ul>
+
+<h3>部品</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>部品</th><th>役割</th></tr></thead>
+  <tbody>
+    <tr><td class="nowrap"><code>repair</code></td><td>塗り残したマスに発射を挿入して埋める。<b>塗りにくいマスから先に</b>割り当てる。塗りにくさは「そのマスを含む長さ5以下の線分の候補数」で、少ないほど難しい（壁や角の近く）。利得は行・列の未塗りビットマスクと popcount で数える</td></tr>
+    <tr><td class="nowrap"><code>tighten</code></td><td>各発射の長さを、その発射だけが塗っているマスまでに縮める。不要になった発射は消す</td></tr>
+    <tr><td class="nowrap"><code>optimizeShots</code></td><td><b>撃ち方DP</b>。発射の順序を固定し、各発射が担当するマスを覆う別の撃ち方（線分の反対端から逆向きに撃つ、塗り済みのマスまで伸ばして撃つ位置をずらす）を、(発射の番号, パワー) を状態とする DP で厳密に選ぶ</td></tr>
+    <tr><td class="nowrap"><code>beamNeighborhood</code></td><td>連続する数発を取り除き、それで塗られなくなったマス（64以下）をビームで置き直す。窓の外の発射を伸ばして先に覆えないかも試す（<code>borrowCoverage</code>）</td></tr>
+    <tr><td class="nowrap"><code>chooseWindow</code></td><td>窓の選び方。区間のコスト増・パワーの減り・塗ったマス数から損失を見積もり、壁際を少し優先して12回の抽選で最悪の区間を選ぶ</td></tr>
+    <tr><td class="nowrap"><code>extendFreeShots</code></td><td>パワーに余裕がある発射を、行動数を増やさずに塗れる範囲まで伸ばす</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>集団焼きなましの近傍</h3>
+<p>1ステップで次のどれかを重み付きで選ぶ。破壊系（0〜5）のあとは <code>repair</code> と <code>tighten</code> で必ず全マスを塗れる状態に戻す。</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th class="num">重み</th><th>近傍</th></tr></thead>
+  <tbody>
+    <tr><td class="num">7＋5</td><td>矩形の窓（一辺6以下、塗りにくいマスが多い場所ほど選ばれやすい）に触れる発射を取り除く。触れる判定は線分全体か始点だけ</td></tr>
+    <tr><td class="num">3</td><td>連続する1〜8発を取り除く</td></tr>
+    <tr><td class="num">3</td><td>ランダムな1〜4発を取り除く</td></tr>
+    <tr><td class="num">5＋3</td><td>1発、または隣り合う2発の位置・向き・長さを少し変える</td></tr>
+    <tr><td class="num">2</td><td>隣り合う2発の順序を入れ替える</td></tr>
+    <tr><td class="num">1</td><td>3〜12発の区間の順序を反転する（半分の確率で各発射を線分の反対端から逆向きに撃つ形に変える）</td></tr>
+    <tr><td class="num">1</td><td>1〜4発の区間を別の位置へ移す</td></tr>
+    <tr><td class="num">5</td><td>1〜5発の窓に撃ち方DPをかける</td></tr>
+    <tr><td class="num">120回に1回</td><td>3〜9発の窓をビームで置き直す</td></tr>
+  </tbody>
+</table>
+</div>
+<ul>
+  <li><b>受理</b>：<code>Δ = Δ行動数 + 0.04 × Δ発射数</code>。best を更新するか Δ≤0 なら受理し、それ以外は確率 <code>exp(−Δ/temp)</code> で受理する。温度は 1.16 から 0.17 へ指数的に下げる。</li>
+  <li><b>途中の磨き</b>：best を更新しそうな解（と64回に1回の近い解）には、3msの撃ち方DPをかけてから判定する。</li>
+  <li><b>個体の回し方</b>：先頭の個体に約29ms、他の3体に約11msずつ割り当てる。一巡ごとに順位を付け直し、上位の個体から下位の個体へ領域を移植する交叉をかける（下位の個体の、その窓に触れる発射を差し替えて修復する）。先頭の個体も、他の個体の領域を貪欲な受理で取り込めるか試す。4巡ごとに、best より3以上悪い個体を best の複製で置き換える。</li>
+</ul>
+
+<h3>評価の物差し</h3>
+<p>オーケストレーターが問題文から導いた上界がある。1発で塗れるマスはパワーと移動で決まり、「1マス移動して P=4 で新しい5マスを撃つ」の繰り返し（1行動あたり2.5マス）が最も効率がよい。ここから1ケースの得点は約 <code>490 + 0.4M</code>（M は壁の数）で抑えられ、M の平均15では約496になる。損失は、壁や盤端で線分が切れること、開始直後（P=0）、終盤、巡回の切り替えで生じる。</p>
+
+<!-- ============================================================ -->
+<h2 id="lineage">9. 解法の系譜（R0001〜R0011）</h2>
+
+<p>効果は、そのラウンドの seed で、直前の best と比べた平均の差である（正ほど良い）。ラウンドごとに seed が違うので、効果どうしを足し合わせても厳密な累計にはならない。</p>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>R</th><th>種別</th><th>engine</th><th class="num">有効</th><th class="num">1位の効果</th><th>採用</th><th>採用した変更</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="nowrap">R0001</td><td>B</td><td>claude</td><td class="num">1/1</td><td class="num">+435.99</td><td><span class="chip good">B01</span></td><td>何もしない解から、状態（位置・P・塗り済み集合）上のビームサーチへ</td></tr>
+    <tr><td class="nowrap">R0002</td><td>A</td><td>claude</td><td class="num">9/10</td><td class="num">+19.39</td><td><span class="chip good">A10</span></td><td>新系統：解を発射の列で表し、領域を壊して挿入し直す LNS。<span class="chip warn">7体が利用上限で途中終了</span></td></tr>
+    <tr><td class="nowrap">R0003</td><td>A</td><td>claude</td><td class="num">10/10</td><td class="num">+2.44</td><td><span class="chip good">A08</span></td><td>LNS の強化：挿入候補を近傍に絞る高速化、差分評価、2.5マス/行動のリズムを保つ修復、近傍の追加</td></tr>
+    <tr><td class="nowrap">R0004</td><td>B</td><td>claude</td><td class="num">1/1</td><td class="num">−0.26</td><td><span class="chip">据え置き</span></td><td>—</td></tr>
+    <tr><td class="nowrap">R0005</td><td>A</td><td>claude</td><td class="num">10/10</td><td class="num">+2.44</td><td><span class="chip good">A01</span></td><td>combine：5×5 ブロック巡回（R0002/A05）を LNS の初期解に入れる</td></tr>
+    <tr><td class="nowrap">R0006</td><td>B</td><td>codex</td><td class="num">1/1</td><td class="num">+0.63</td><td><span class="chip good">B01</span></td><td>撃ち方DP（順序固定で撃ち方・移動・P を厳密化）と、壁際の数発をビームで置き直す近傍</td></tr>
+    <tr><td class="nowrap">R0007</td><td>A</td><td>claude</td><td class="num">10/10</td><td class="num">+0.65</td><td><span class="chip good">A01</span></td><td>combine：同系統の高速化（ビットマスクと popcount による枝刈りなど）を移植</td></tr>
+    <tr><td class="nowrap">R0008</td><td>A</td><td>codex</td><td class="num">10/10</td><td class="num">+0.98</td><td><span class="chip good">A06</span></td><td>塗りにくいマスから修復し、塗りにくいマスの多い領域（壁の周り）を壊しやすくする。<span class="chip warn">3体が時間切れ</span></td></tr>
+    <tr><td class="nowrap">R0009</td><td>A</td><td>codex</td><td class="num">10/10</td><td class="num">+0.84</td><td><span class="chip good">A01</span></td><td>combine：集団探索（複数の LNS 解を並べ、領域を移植し、悪い解を良い解で置き換える）を移植。<span class="chip warn">4体が時間切れ</span></td></tr>
+    <tr><td class="nowrap">R0010</td><td>B</td><td>manual</td><td class="num">1/1</td><td class="num">+0.24</td><td><span class="chip good">B01</span></td><td>内部の時間予算を1.75秒から1.95秒へ（区切りも同じ比率で伸ばす）と、判断を変えない定数倍の高速化</td></tr>
+    <tr><td class="nowrap">R0011</td><td>A</td><td>codex</td><td class="num">10/10</td><td class="num">+0.75</td><td><span class="chip good">A07</span></td><td>骨格の予選：多数の骨格を撃ち方DPと短い焼きなましで安く評価し、上位にだけ本格的な探索をかける</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>各ラウンドの候補の分布</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>R</th><th class="num">効果 &gt; 0</th><th class="num">効果 ≤ 0</th><th class="num">無効</th><th class="num">最小〜最大</th></tr></thead>
+  <tbody>
+    <tr><td>R0002</td><td class="num">4</td><td class="num">5</td><td class="num">1（コンパイルエラー）</td><td class="num">−13.92 〜 +19.39</td></tr>
+    <tr><td>R0003</td><td class="num">2</td><td class="num">8</td><td class="num">0</td><td class="num">−42.76 〜 +2.44</td></tr>
+    <tr><td>R0005</td><td class="num">5</td><td class="num">5</td><td class="num">0</td><td class="num">−30.11 〜 +2.44</td></tr>
+    <tr><td>R0007</td><td class="num">6</td><td class="num">4</td><td class="num">0</td><td class="num">−0.11 〜 +0.65</td></tr>
+    <tr><td>R0008</td><td class="num">9</td><td class="num">1</td><td class="num">0</td><td class="num">−0.05 〜 +0.98</td></tr>
+    <tr><td>R0009</td><td class="num">10</td><td class="num">0</td><td class="num">0</td><td class="num">+0.01 〜 +0.84</td></tr>
+    <tr><td>R0011</td><td class="num">7</td><td class="num">3</td><td class="num">0</td><td class="num">−0.32 〜 +0.75</td></tr>
+  </tbody>
+</table>
+</div>
+<p>R0003 と R0005 の <code>new</code> 案（焼きなまし単独、経路と撃つ向きの焼きなましなど）は、どれも当時の best に大きく負けた。R0007 以降の A は、全案が現bestの <code>continue</code> か <code>combine</code> になり、効果の幅は ±1 以内に収まっている。</p>
+
+<h3>公式提出（ユーザーの手動提出）</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>提出した best</th><th class="num">ローカル平均（そのラウンドの seed）</th><th class="num">公式（100ケース合計）</th></tr></thead>
+  <tbody>
+    <tr><td>R0001/B01（ビームサーチ）</td><td class="num">450.6</td><td class="num">45492</td></tr>
+    <tr><td>R0006/B01（ブロック巡回＋LNS＋撃ち方DP）</td><td class="num">473.3</td><td class="num">47330</td></tr>
+    <tr><td>R0007/A01（高速化の移植）</td><td class="num">473.6</td><td class="num">47391</td></tr>
+    <tr><td>R0008/A06（塗りにくさ順の修復）</td><td class="num">474.7</td><td class="num">47474</td></tr>
+  </tbody>
+</table>
+</div>
+<p>元のコンテストの1位は47492。R0009 以降の best を提出した記録は無い。</p>
+
+<!-- ============================================================ -->
+<h2 id="outlook">10. 知見と未解決の点</h2>
+
+<h3>解法について</h3>
+<ul>
+  <li><b>時間を増やしても伸びにくい。</b>R0007 時点の best に時間だけを与えると、4秒で +0.9、20秒で +2.1、100秒で +3.0（seed 0〜9）だった。伸びの大半は焼きなましの前、つまり試せる初期解の数が増えたことから来ていた。焼きなましは予算によらず約6〜7手しか減らさない。</li>
+  <li>この結果から、R0011 では「骨格を安く多数予選する」案を出し、採用された。次も、骨格の生成と選別、または停滞を抜ける構造的な近傍が狙い目になる。</li>
+  <li>壁の少ない盤面（K が163〜166）は、初期解からほとんど改善しない。上界（M=0 で K≥160）との差は小さく、伸びしろは壁の多い盤面に偏る。</li>
+</ul>
+
+<h3>ハーネスについて</h3>
+<ul>
+  <li>利用上限や時間切れで止まった worker も、<code>main.cpp</code> があれば <code>submitted</code> として凍結される。区別は <code>job.json</code> の <code>agent_outcome</code> だけで、再実行の手段が無い（R0002・R0008・R0009 で発生）。</li>
+  <li>使った engine は <code>state.json</code> にしか残らず、<code>close</code> で上書きされて消える。1ラウンドの中で claude と codex を混ぜることもできない。</li>
+  <li>workspace はリポジトリの中（<code>runs/</code>）にある。codex のサンドボックスは読み取りを制限しないので、外を読まない指示を破れば履歴に届く。</li>
+  <li>claude worker はテキスト出力なので、トークン使用量が記録されない。<code>--output-format stream-json</code> にすれば記録と利用上限の使用率が取れる。</li>
+</ul>
+
+<footer>
+  <p>このファイルは 2026-11-18 時点のスナップショットで、自動では更新されない。数値は <code>runs/R####/result.json</code> と <code>best/best.json</code>、公式提出の結果はユーザーの報告による。最新の状況は <code>.venv/bin/python -m thin.cli status</code> で確かめる。</p>
+</footer>
+
+</main>
+</body>
+</html>

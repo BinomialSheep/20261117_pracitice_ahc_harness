@@ -1,15 +1,25 @@
 # AHC ハーネス実験 20261117
 
-## 概要
+## 解く問題
+
+https://atcoder.jp/contests/atcoder13live
+
+## 人間による説明
 
 with AI練習。
 ここでは
 https://www.youtube.com/watch?v=8HT49Qb9dYA
-を基に作った「ahc_thin_harness_v0_1_0」
+を基に作った「ahc_thin_harness_v0_1_0」の試し切りと、その改善を目的としている。
 
-## 解く問題
+### 結果
 
-https://atcoder.jp/contests/atcoder13live
+- SNAPSHOT_2026-11-18.html：現時点の解法
+- HUMAN_MEMO.md：人間によるメモ
+- TEMPLATE_FEEDBACK.md：ハーネス改善に向けたフィードバック
+
+---
+
+以降はAIが勝手に書いてるもの。
 
 ## この実験のルール
 
@@ -20,22 +30,22 @@ https://atcoder.jp/contests/atcoder13live
 
 ハーネス（ahc_thin_harness v0.1.0）をリポジトリ直下に展開し、`problem/` にこの問題をつないだ。
 
-| パス | 内容 |
-|---|---|
-| `AGENTS.md` | オーケストレーター向けの指示。毎回読み込まれるので、行動に必要なことだけを書く |
-| `HARNESS.md` | ハーネスのREADME（配布物の `README.md` を改名） |
-| `config.json` | この問題用の設定（Git管理する） |
-| `problem/statement.md` | 問題文。`問題文.html` から変換し、末尾にローカル評価の付記を加えた |
-| `problem/statement.html` | 問題文の原本（元の `問題文.html`） |
-| `problem/tools/` | 公式ツール一式、judgeアダプタ `score_case.py`、説明 `LOCAL_JUDGE.md` |
-| `problem/tools/bin/` | 公式ツールのビルド済みバイナリ（Git管理外、`scripts/build_tools.sh` で生成） |
-| `scripts/build_tools.sh` | 公式ツールをビルドして `problem/tools/bin/` に置く |
-| `scripts/codex_limits.py`, `scripts/codex_audit.py` | Codex の利用上限を読む／codex worker の行動を監査する |
-| `tests/test_problem.py` | judgeアダプタとハーネス接続のテスト |
-| `docs/TEMPLATE_FEEDBACK.md` | 雛形作成担当に渡す、問題によらないフィードバック |
+| パス                                                                                                  | 内容                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                                                           | オーケストレーター向けの指示。毎回読み込まれるので、行動に必要なことだけを書く                                                                                                                                                                                                                                                                                                                                          |
+| `HARNESS.md`                                                                                          | ハーネスのREADME（配布物の `README.md` を改名）                                                                                                                                                                                                                                                                                                                                                                         |
+| `config.json`                                                                                         | この問題用の設定（Git管理する）                                                                                                                                                                                                                                                                                                                                                                                         |
+| `problem/statement.md`                                                                                | 問題文。`問題文.html` から変換し、末尾にローカル評価の付記を加えた                                                                                                                                                                                                                                                                                                                                                      |
+| `problem/statement.html`                                                                              | 問題文の原本（元の `問題文.html`）                                                                                                                                                                                                                                                                                                                                                                                      |
+| `problem/tools/`                                                                                      | 公式ツール一式、judgeアダプタ `score_case.py`、説明 `LOCAL_JUDGE.md`                                                                                                                                                                                                                                                                                                                                                    |
+| `problem/tools/bin/`                                                                                  | 公式ツールのビルド済みバイナリ（Git管理外、`scripts/build_tools.sh` で生成）                                                                                                                                                                                                                                                                                                                                            |
+| `scripts/build_tools.sh`                                                                              | 公式ツールをビルドして `problem/tools/bin/` に置く                                                                                                                                                                                                                                                                                                                                                                      |
+| `scripts/codex_limits.py`, `scripts/codex_audit.py`                                                   | Codex の利用上限を読む／codex worker の行動を監査する                                                                                                                                                                                                                                                                                                                                                                   |
+| `tests/test_problem.py`                                                                               | judgeアダプタとハーネス接続のテスト                                                                                                                                                                                                                                                                                                                                                                                     |
+| `docs/TEMPLATE_FEEDBACK.md`                                                                           | 雛形作成担当に渡す、問題によらないフィードバック                                                                                                                                                                                                                                                                                                                                                                        |
 | `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から）。codex が親ディレクトリの `AGENTS.md` を読みにいくので、各作業場所に短い `AGENTS.md` を置き、task.md に外を読まない1行を足した（R0009から） |
-| `FILE_MANIFEST.json` | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない |
-| `runs/`, `best/` | ラウンド実行時に作られる（Git管理外） |
+| `FILE_MANIFEST.json`                                                                                  | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない                                                                                                                                                                                                                                                                                                                                                      |
+| `runs/`, `best/`                                                                                      | ラウンド実行時に作られる（Git管理外）                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## セットアップ（クローン直後に1回）
 
@@ -57,6 +67,7 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
   3. 公式の `vis` で検証・採点する
 
   無効（TLE・RE・MLE・WA）と環境エラーは区別して扱う。詳しくは [problem/tools/LOCAL_JUDGE.md](problem/tools/LOCAL_JUDGE.md)。
+
 - **スコア**：1ケースの得点（最大650）を `maximize`・`paired_difference` で比べる。
 - **コンパイル**：`g++ -std=gnu++23 -O2 -DONLINE_JUDGE -DATCODER`。AtCoderに合わせて `-DNDEBUG` は付けない（`assert` が有効）。AtCoder Library はローカルに無い。
 - **seed**：ラウンド r の評価には seed `1000r`〜`1000r+999` を使う。workerのdebug seedは、Aが0だけ、Bが0〜9。
@@ -73,6 +84,7 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
   PATH="$(ls -d ~/.vscode-server/extensions/anthropic.claude-code-*-linux-x64/resources/native-binary | sort -V | tail -1):$PATH" \
     .venv/bin/python -m thin.cli run-workers R0001 --engine claude
   ```
+
 - `--effort high`：effortを個人の設定に左右させず、サブスクの利用上限を節約するため（R0003から）。
 - `--safe-mode`：CLAUDE.md・MCP・skills・hooks・自動メモリを読み込まない。親ディレクトリの情報がworkerに伝わらないようにするため。workerと同じ構成で何も読み込まれないことは確認済み（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の8）。
 - `--permission-mode acceptEdits --permission-prompts none`：ファイル編集は許可する。許可リストにないコマンドは確認せずに拒否する。
