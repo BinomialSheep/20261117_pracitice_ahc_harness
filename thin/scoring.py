@@ -52,7 +52,8 @@ def _case(root,rd,binary,seed,config,jid):
             reason=(t/'judge.stderr').read_text(errors='replace')[-400:] if (t/'judge.stderr').exists() else str(proc)
         return {'seed':seed,'status':status,'score':score,'seconds':proc['seconds'],'reason':reason}
 
-def score_source(root,rd,jid,source,config,seeds,tool_digest):
+def _prepare_source(root,rd,jid,source,config,seeds,tool_digest):
+    """Identity check, compile and seed0 gate. Returns (state, None) when cases may run, else (None, final record)."""
     work=rd/'evaluation'/jid;work.mkdir(parents=True,exist_ok=True)
     manifest=work/'source.json';sha=digest(source)
     identity={'source_sha256':sha,'tool_sha256':tool_digest,'judge_command':config['judge']['command'],
@@ -61,7 +62,7 @@ def score_source(root,rd,jid,source,config,seeds,tool_digest):
         if read_json(manifest)!=identity:raise ThinError(f'Changed evidence identity for {jid}')
     else:write_json(manifest,identity)
     binary,binfo=_compile(root,rd,source,jid,config)
-    if binary is None:return {'id':jid,'valid':False,'status':'compile_error','error':binfo.get('reason'),'source_sha256':sha,'n':0}
+    if binary is None:return None,{'id':jid,'valid':False,'status':'compile_error','error':binfo.get('reason'),'source_sha256':sha,'n':0}
     # Orchestrator-side seed0 gate: worker self-report alone is not sufficient.
     smoke=work/'seed0.json'
     if smoke.exists():
@@ -73,8 +74,8 @@ def score_source(root,rd,jid,source,config,seeds,tool_digest):
         check['source_sha256']=sha;check['tools_sha256']=tool_digest
         write_json(smoke,check)
     if check.get('status')!='ok':
-        return {'id':jid,'valid':False,'status':'seed0_failed','error':check.get('reason','seed0 failed'),
-                'source_sha256':sha,'n':0}
+        return None,{'id':jid,'valid':False,'status':'seed0_failed','error':check.get('reason','seed0 failed'),
+                     'source_sha256':sha,'n':0}
     csvpath=work/'scores.csv';existing=[]
     if csvpath.exists():
         with csvpath.open(newline='') as f:
@@ -83,16 +84,57 @@ def score_source(root,rd,jid,source,config,seeds,tool_digest):
             existing=list(rdrows)
         if len(existing)>len(seeds) or [int(r['seed']) for r in existing]!=seeds[:len(existing)]:
             raise ThinError(f'Score file missing, reordered or duplicate seeds for {jid}')
-    bad=[r for r in existing if r['status']!='ok']
-    if not bad or not config['evaluation']['early_stop_on_invalid']:
-        with csvpath.open('a',newline='') as f:
-            writer=csv.DictWriter(f,fieldnames=FIELDS)
-            if not existing:writer.writeheader()
-            for seed in seeds[len(existing):]:
-                rec=_case(root,rd,binary,seed,config,jid)
-                writer.writerow(rec);f.flush()
-                existing.append({k:'' if v is None else str(v) for k,v in rec.items()})
-                if rec['status']!='ok' and config['evaluation']['early_stop_on_invalid']:break
+    return {'id':jid,'sha':sha,'binary':binary,'csv':csvpath,'existing':existing},None
+
+def _run_cases(root,rd,config,seeds,states):
+    """Run the remaining cases of all sources on one shared pool of `parallelism` slots.
+
+    Cases are queued seed-major and round-robin over sources, so the baseline and every candidate run under the
+    same load. Each scores.csv still receives rows in seed order (out-of-order completions wait in memory), so a
+    crash leaves a resumable prefix. With early_stop_on_invalid a source gets no new cases after an invalid one,
+    and its file ends at the first invalid seed, as in sequential scoring.
+    """
+    early=config['evaluation']['early_stop_on_invalid'];slots=config['evaluation']['parallelism']
+    queues={}
+    for st in states:
+        if early and any(r['status']!='ok' for r in st['existing']):continue
+        if len(st['existing'])<len(seeds):queues[st['id']]=seeds[len(st['existing']):]
+    if not queues:return
+    by_id={st['id']:st for st in states}
+    order=iter([(jid,q[i]) for i in range(max(map(len,queues.values()))) for jid,q in queues.items() if i<len(q)])
+    pending={jid:{} for jid in queues};stopped=set();closed=set();files={}
+    try:
+        writers={}
+        for jid in queues:
+            f=files[jid]=by_id[jid]['csv'].open('a',newline='');writers[jid]=csv.DictWriter(f,fieldnames=FIELDS)
+            if not by_id[jid]['existing']:writers[jid].writeheader();f.flush()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=slots) as pool:
+            inflight={}
+            def fill():
+                while len(inflight)<slots:
+                    for jid,seed in order:
+                        if jid not in stopped:
+                            inflight[pool.submit(_case,root,rd,by_id[jid]['binary'],seed,config,jid)]=jid;break
+                    else:return
+            fill()
+            while inflight:
+                finished,_=concurrent.futures.wait(inflight,return_when=concurrent.futures.FIRST_COMPLETED)
+                for future in finished:
+                    jid=inflight.pop(future);rec=future.result()
+                    if jid in closed:continue
+                    if rec['status']!='ok' and early:stopped.add(jid)
+                    pending[jid][rec['seed']]=rec;existing=by_id[jid]['existing']
+                    while len(existing)<len(seeds) and seeds[len(existing)] in pending[jid]:
+                        row=pending[jid].pop(seeds[len(existing)])
+                        writers[jid].writerow(row);files[jid].flush()
+                        existing.append({k:'' if v is None else str(v) for k,v in row.items()})
+                        if row['status']!='ok' and early:closed.add(jid);break
+                fill()
+    finally:
+        for f in files.values():f.close()
+
+def _finish_source(state,seeds):
+    jid=state['id'];existing=state['existing'];sha=state['sha']
     bad=[r for r in existing if r['status']!='ok']
     if bad:
         return {'id':jid,'valid':False,'status':bad[0]['status'],'error':bad[0]['reason'],
@@ -100,6 +142,22 @@ def score_source(root,rd,jid,source,config,seeds,tool_digest):
     scores=[float(r['score']) for r in existing]
     return {'id':jid,'valid':len(scores)==len(seeds),'status':'ok' if len(scores)==len(seeds) else 'incomplete',
             'mean_score':statistics.mean(scores) if scores else None,'n':len(scores),'source_sha256':sha}
+
+def score_sources(root,rd,sources,config,seeds,tool_digest):
+    """Score [(job_id, source)] on `seeds`, sharing evaluation.parallelism slots across sources and cases."""
+    records={};states=[]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=config['evaluation']['parallelism']) as pool:
+        futures={pool.submit(_prepare_source,root,rd,jid,src,config,seeds,tool_digest):jid for jid,src in sources}
+        for future in concurrent.futures.as_completed(futures):
+            state,final=future.result()
+            if final:records[futures[future]]=final
+            else:states.append(state)
+    _run_cases(root,rd,config,seeds,states)
+    for state in states:records[state['id']]=_finish_source(state,seeds)
+    return records
+
+def score_source(root,rd,jid,source,config,seeds,tool_digest):
+    return score_sources(root,rd,[(jid,source)],config,seeds,tool_digest)[jid]
 
 def _scores(rd,jid):
     with (rd/'evaluation'/jid/'scores.csv').open(newline='') as f:
@@ -134,19 +192,19 @@ def evaluate(root,rid):
     for jid,src in jobs:
         j=read_json(src.parent/'job.json')
         if not src.is_file() or digest(src)!=j['sha256']:raise ThinError('Candidate changed after submission: '+jid)
-    b=plan['best_before'];baseline=None
+    b=plan['best_before'];baseline=None;sources=[]
     if b:
         src=rd/'baseline.cpp'
         if not src.exists() or digest(src)!=b['sha256']:raise ThinError('Frozen previous best was changed')
-        baseline=score_source(root,rd,'baseline',src,config,seeds,plan['tools_sha256'])
-        if not baseline['valid']:raise ThinError('Current baseline fails evaluation; round comparison unsafe: '+str(baseline))
+        sources.append(('baseline',src))
     groups={}
     for jid,source in jobs:groups.setdefault(digest(source),[]).append((jid,source))
     first=[group[0] for group in groups.values()]
-    scored={}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=config['evaluation']['parallelism']) as pool:
-        pending={pool.submit(score_source,root,rd,jid,src,config,seeds,plan['tools_sha256']):jid for jid,src in first}
-        for future in concurrent.futures.as_completed(pending):scored[pending[future]]=future.result()
+    # Baseline and candidates share one case-level pool, so they are scored under the same load.
+    scored=score_sources(root,rd,sources+first,config,seeds,plan['tools_sha256'])
+    if b:
+        baseline=scored.pop('baseline')
+        if not baseline['valid']:raise ThinError('Current baseline fails evaluation; round comparison unsafe: '+str(baseline))
     results=[]
     baseline_scores=_scores(rd,'baseline') if baseline else None
     for group in groups.values():

@@ -32,7 +32,7 @@ https://atcoder.jp/contests/atcoder13live
 | `scripts/build_tools.sh` | 公式ツールをビルドして `problem/tools/bin/` に置く |
 | `tests/test_problem.py` | judgeアダプタとハーネス接続のテスト |
 | `docs/TEMPLATE_FEEDBACK.md` | 雛形作成担当に渡す、問題によらないフィードバック |
-| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体（無改変） |
+| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` だけ変更した（R0003から） |
 | `FILE_MANIFEST.json` | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない |
 | `runs/`, `best/` | ラウンド実行時に作られる（Git管理外） |
 
@@ -59,10 +59,10 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
 - **スコア**：1ケースの得点（最大650）を `maximize`・`paired_difference` で比べる。
 - **コンパイル**：`g++ -std=gnu++23 -O2 -DONLINE_JUDGE -DATCODER`。AtCoderに合わせて `-DNDEBUG` は付けない（`assert` が有効）。AtCoder Library はローカルに無い。
 - **seed**：ラウンド r の評価には seed `1000r`〜`1000r+999` を使う。workerのdebug seedは、Aが0だけ、Bが0〜9。
-- **評価時間の目安**：制限時間いっぱい（1.8秒）まで探索するソルバーだと、1候補1000ケースで約31分かかる（候補内のケースは逐次実行）。Bラウンドは現bestと候補を順に測るので約1時間。Aラウンドは、現best 31分の後に10候補を10並列（1回）で測るので約1時間。`evaluation.parallelism`（最大10）で調整できる。CPUは16コア32スレッドなので、R0002から8並列を10並列にした。
-- **評価の偏り**：ハーネスは現bestを単独で、候補を並列で採点する。そのため時間いっぱい探索する解法では、Aラウンドの候補がわずかに不利になる（昇格が保守的になる方向）。並列8で1.8秒のソルバーを動かしたときの実測時間は1.817秒で、TLEの誤判定は出なかった。
+- **評価時間の目安**：現bestと全候補のケースを1つの待ち行列に混ぜ、`evaluation.parallelism` 本ずつ並列に採点する（R0003から。それまでは候補内のケースを1つずつ実行していた）。並列度は12にしている（CPUは16コア32スレッド）。1.8秒使い切るソルバーで、Bラウンド（2000ケース）は約5分、Aラウンド（11000ケース）は約27分。
+- **評価の偏り**：現bestと候補のケースは交互に並ぶので、同じ負荷で採点される。1.77秒使うソルバーを12並列・16並列で動かしても、実測時間は単独のときと同じ（最大1.767秒）で、TLEの誤判定は出なかった。
 
-## worker の起動設定（まだ実行していない）
+## worker の起動設定
 
 `config.json` の `workers.engines.claude` には次のフラグを付けている。
 
@@ -78,7 +78,7 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
 - `--allowedTools`：`python3 quickcheck.py` と `g++` だけを許可する。Aでseed0以外を走らせないため。
 - `--disallowedTools WebSearch WebFetch`：過去問のルールを守るため。
 
-`claude -p` を実際に使ったworkerの実行は課金を伴うので、まだ試していない。最初はBラウンド1体などで動作を確かめ、それから10並列のAに進む。`codex` はこのマシンに入っていない。
+R0001（Bラウンド1体）で動作を確かめ、R0002から10並列のAも使っている。サブスクの利用上限に注意する（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の9）。`codex` はこのマシンに入っていない。
 
 ## 進め方
 

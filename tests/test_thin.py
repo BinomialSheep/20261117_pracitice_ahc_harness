@@ -98,6 +98,30 @@ class ThinHarness(unittest.TestCase):
             with self.assertRaises(ThinError):E.promote(r,'R0002','B01')
             self.assertEqual(C.read_best(r)['job'],'A01')
             C.close(r,'R0002')
+    def test_parallel_cases_keep_seed_order_and_stop_at_first_invalid(self):
+        import random
+        with tempfile.TemporaryDirectory(prefix='AHC parallel ') as td:
+            r=Path(td)/'w';shutil.copytree(self.root,r)
+            cfg=read_json(r/'config.json');cfg['evaluation'].update(count=12,parallelism=4);write_json(r/'config.json',cfg)
+            prep=C.prepare(r,'B',idea_text='Crash on one specific input to exercise parallel early stop')
+            seeds=list(range(prep['seed_start'],prep['seed_start']+12))
+            first2=lambda s:(lambda g:(g.randint(1,1000),g.randint(1,1000)))(random.Random(s))
+            bad=seeds[5];x,y=first2(bad)
+            self.assertNotIn((x,y),[first2(s) for s in [0]+seeds[:5]])
+            # Sleeps vary per input so cases finish out of order; the solver crashes only on seed `bad`.
+            (r/'runs/R0002/jobs/B01/workspace/main.cpp').write_text(
+                '#include <bits/stdc++.h>\n#include <thread>\nint main(){int n,k;std::cin>>n>>k;std::vector<int>v(n);'
+                'for(auto&e:v)std::cin>>e;std::this_thread::sleep_for(std::chrono::milliseconds((v[1]%4)*40));'
+                f'if(v[0]=={x}&&v[1]=={y})return 1;for(int i=0;i<k;i++)std::cout<<i<<" ";std::cout<<"\\n";}}\n')
+            C.submit(r,'R0002','B01');C.mark_workers_done(r,'R0002')
+            res=E.evaluate(r,'R0002')
+            cand=res['candidates'][0]
+            self.assertFalse(cand['valid']);self.assertEqual(cand['first_bad_seed'],bad)
+            ev=r/'runs/R0002/evaluation'
+            rows=lambda j:[int(line.split(',')[0]) for line in (ev/j/'scores.csv').read_text().splitlines()[1:]]
+            self.assertEqual(rows('B01'),seeds[:6])
+            self.assertEqual(rows('baseline'),seeds)
+            self.assertTrue(res['baseline']['valid'])
     def test_new_round_without_initial_best_is_possible(self):
         with tempfile.TemporaryDirectory(prefix='AHC fresh ') as td:
             r=Path(td)/'fresh';shutil.copytree(ROOT/'thin',r/'thin')

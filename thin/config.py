@@ -1,5 +1,5 @@
 from pathlib import Path
-import copy,math,sys
+import copy,math,os,sys
 from .util import ThinError,read_json,relpath,format_argv,digest
 
 def load(root):
@@ -17,7 +17,8 @@ def load(root):
         if judge['metric'] not in ('paired_difference','paired_log_ratio'):raise ThinError('judge.metric must be paired_difference/paired_log_ratio')
         if not isinstance(judge['timeout_sec'],(float,int)) or judge['timeout_sec']<=0:raise ThinError('Positive judge timeout required')
         if type(ev['count'])!=int or ev['count']<=0 or type(ev['first_seed'])!=int or ev['first_seed']<1:raise ThinError('Positive count and first seed>=1 required')
-        if type(ev['parallelism'])!=int or not 1<=ev['parallelism']<=10:raise ThinError('evaluation parallelism between 1 and 10 required')
+        cpus=os.cpu_count() or 1
+        if type(ev['parallelism'])!=int or not 1<=ev['parallelism']<=max(cpus,10):raise ThinError(f'evaluation parallelism between 1 and {max(cpus,10)} (CPU count) required')
         if not isinstance(ev['promotion_margin'],(float,int)) or not math.isfinite(ev['promotion_margin']) or ev['promotion_margin']<0:raise ThinError('Nonnegative finite promotion margin required')
         if type(workers['parallelism_A'])!=int or not 1<=workers['parallelism_A']<=10:raise ThinError('workers.parallelism_A must be 1..10')
         for kind in ('A','B'):
