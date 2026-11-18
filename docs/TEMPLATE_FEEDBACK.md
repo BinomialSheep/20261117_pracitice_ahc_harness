@@ -77,3 +77,15 @@ ahc_thin_harness の雛形作成担当に渡す、問題によらない指摘の
   - worker が使うCLIのバージョンを、起動前に確かめる手順を入れる（`claude --version`、または短い `claude -p` を1回）。worker の失敗は `job.json` の `worker_failed` と `agent.stdout` でしか分からないので、10並列のAで初めて気づくと影響が大きい。
   - 上の確認手順（陽性対照つき）を、engine を初めて使うときやCLIを替えたときの手順として docs に載せる。
 - このリポジトリでは：worker と同じ形では何も読み込まれないことを確かめた。`--model claude-opus-5-5` を付け、`run-workers` は VS Code 拡張に同梱のCLIを PATH の先頭に置いて実行している。
+
+## 9. 利用上限で途中終了した worker が、完走した worker と同じ「提出済み」になる（R0002で判明）
+
+- 起きたこと：サブスクで A（10並列）を始めて約5分で、10体中7体が5時間の利用上限に達して止まった（`agent.stdout` は "You've hit your 5-hour limit" の1行、終了コード1）。直前に B（1体32分）とオーケストレーター自身の作業があった。
+  - 止まった worker も、`main.cpp` が途中まで書かれていれば `submitted` として凍結される。違いは `job.json` の `agent_outcome: error` だけで、`run-workers` の結果でも目立たない。
+  - `_worker` は `submitted` の job を再実行せず、`submit`・`fail` は `prepared` の間しか使えない。`close` は未評価の提出があると拒否する。そのため、途中の版を評価するか、state ファイルを手で書き換えるしかない。
+  - 完走した worker は約5分で終わっていた。A の20分は、多くの案で上限として余っている。
+- 次の雛形で：
+  - `run-workers` の結果で、途中終了（`agent_outcome` が `ok` 以外）を目立たせる。オーケストレーターがその job を再実行するか失敗扱いにできるコマンドを用意する。
+  - 上限のメッセージを検出したら、まだ起動していない worker を起動しない。
+  - 利用上限のあるプランでは、A の並列数・時間・モデル・effort を上限から逆算して決める手順を docs に書く。
+- このリポジトリでは：R0002 は途中終了の7体も含めてそのまま評価した。
