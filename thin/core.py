@@ -88,6 +88,13 @@ def _ideas(mode,idea_json,idea_text):
         return [{'id':'B01','kind':'deep','idea':idea_text.strip(),'parents':['best']}]
     raise ThinError('mode must be A or B')
 
+# Codex reads AGENTS.md at the workspace root and otherwise walks up the tree looking for one (R0008).
+WORKSPACE_AGENTS="""# この作業場所の指示
+
+- 課題は `task.md` にある。最初に読む。
+- この作業場所の外（親ディレクトリを含む）のファイルは読まない。上の階層の `AGENTS.md` も探さない。
+"""
+
 def _task_text(mode,job,deadline_minutes,debug_seeds):
     p='、'.join(f'parent_{i}.cpp' for i in range(1,len(job['parents'])+1))
     seed_info='seed0だけ' if mode=='A' else ('許可されたdebug seedだけ（最大20ケース）')
@@ -112,6 +119,7 @@ def _task_text(mode,job,deadline_minutes,debug_seeds):
 - 採点は `quickcheck.py` だけで行う。公式ツール（`problem/tools/` の gen・tester・vis・score_case.py）や `problem/tools/in/` の入力を直接使って、許可seed以外を試さない。
 - **1000ケースの性能評価、大量のシード生成、並列ベンチ、長時間学習はしない**。それらは全worker完了後にオーケストレーターが順番・同条件で実施する。
 - 他workerや親プロジェクトのファイルは変更せず、このworkspaceの中だけを編集する。
+- このworkspaceの外のファイル（親ディレクトリの `AGENTS.md` を含む）は読まない。
 - 公式ツールのコピーは試験用。提出ソースは一つの `main.cpp` とする。
 - 自信がなくても最後に現時点の最良コードを `main.cpp` に確定する。出力のない場合は失敗扱いになる。
 '''
@@ -158,6 +166,7 @@ def prepare(root,mode,ideas_path=None,idea_text=None):
             if (root/'demo_assets/fake_agent.py').exists():
                 shutil.copyfile(root/'demo_assets/fake_agent.py',w/'fake_agent.py')
                 shutil.copyfile(root/'demo_assets/toy_optimized.cpp',w/'toy_optimized.cpp')
+            (w/'AGENTS.md').write_text(WORKSPACE_AGENTS,encoding='utf-8')
             (w/'task.md').write_text(_task_text(mode,{**idea,'parents':parents},config['workers'][f'minutes_{mode}'],mini['allowed_seeds']),encoding='utf-8')
             job={'id':jobid,'status':'pending','idea':idea['idea'],'kind':idea['kind'],'parents':parents,'created_at':now()}
             write_json(jdir/'job.json',job)

@@ -33,7 +33,7 @@ https://atcoder.jp/contests/atcoder13live
 | `scripts/codex_limits.py`, `scripts/codex_audit.py` | Codex の利用上限を読む／codex worker の行動を監査する |
 | `tests/test_problem.py` | judgeアダプタとハーネス接続のテスト |
 | `docs/TEMPLATE_FEEDBACK.md` | 雛形作成担当に渡す、問題によらないフィードバック |
-| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から） |
+| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から）。codex が親ディレクトリの `AGENTS.md` を読みにいくので、各作業場所に短い `AGENTS.md` を置き、task.md に外を読まない1行を足した（R0009から） |
 | `FILE_MANIFEST.json` | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない |
 | `runs/`, `best/` | ラウンド実行時に作られる（Git管理外） |
 
