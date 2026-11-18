@@ -89,3 +89,9 @@ ahc_thin_harness の雛形作成担当に渡す、問題によらない指摘の
   - 上限のメッセージを検出したら、まだ起動していない worker を起動しない。
   - 利用上限のあるプランでは、A の並列数・時間・モデル・effort を上限から逆算して決める手順を docs に書く。
 - このリポジトリでは：R0002 は途中終了の7体も含めてそのまま評価した。
+
+## 10. worker の effort が個人の設定に左右される（R0002のあとにユーザー指摘）
+
+- 起きたこと：engine の argv に `--effort` が無かった。そのため worker の effort は、ユーザー設定（ここでは `~/.claude/settings.json` の `modelSettings` に、`claude-opus-5-5` の `effortLevel: xhigh`）に左右されうる。`--safe-mode` のもとでこの設定が効くかは確かめていない。effort が高いと、worker 1体あたりの消費が増え、9の利用上限に早く達する。
+- 次の雛形で：`--model` と同じく `--effort` も engine の argv に明示する。worker の消費は「並列数×時間×effort」で決まるので、利用上限のあるプランで A と B の effort をどう選ぶかを docs に書く。
+- このリポジトリでは：R0003 から `--effort high` を明示した。

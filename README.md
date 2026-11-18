@@ -72,6 +72,7 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
   PATH="$(ls -d ~/.vscode-server/extensions/anthropic.claude-code-*-linux-x64/resources/native-binary | sort -V | tail -1):$PATH" \
     .venv/bin/python -m thin.cli run-workers R0001 --engine claude
   ```
+- `--effort high`：effortを個人の設定に左右させず、サブスクの利用上限を節約するため（R0003から）。
 - `--safe-mode`：CLAUDE.md・MCP・skills・hooks・自動メモリを読み込まない。親ディレクトリの情報がworkerに伝わらないようにするため。workerと同じ構成で何も読み込まれないことは確認済み（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の8）。
 - `--permission-mode acceptEdits --permission-prompts none`：ファイル編集は許可する。許可リストにないコマンドは確認せずに拒否する。
 - `--allowedTools`：`python3 quickcheck.py` と `g++` だけを許可する。Aでseed0以外を走らせないため。
