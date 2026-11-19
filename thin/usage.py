@@ -5,13 +5,21 @@ Categories are the same for both engines: in=uncached input, cw=cache write, cr=
 out=output including thinking, think=the thinking part of out. Codex input_tokens includes the cached
 part, so it is subtracted. ctx is the input read by one call (in+cw+cr). Limits are percentages of the
 subscription's 5-hour and weekly windows. No dollar figures: the plans are subscriptions.
+
+Interactive calls are attributed to a round only when they are round work (see attribute):
+the session must have run that round's harness commands, and the call must fall between the start of
+the turn that ran `prepare` and the end of the turn that ran `close`. Everything else is OUTSIDE.
 """
 from __future__ import annotations
-import collections,datetime as dt,json,os,re,shutil
+import bisect,datetime as dt,json,os,re,shutil
 from pathlib import Path
 
 KEYS=('in','cw','cr','out','think')
 CODEX_WINDOWS={300:'five_hour',10080:'seven_day'}
+OUTSIDE='ラウンド外'
+CMD_RE=re.compile(r'-m\s+thin\.cli\s+(?:--root\s+\S+\s+)?([a-z][a-z-]*)(?:\s+(R\d{4,}))?')
+ROUND_CMDS={'prepare','round','run-workers','submit','fail','workers-done','evaluate','promote','close'}
+TAG_RE=re.compile(r'<([a-z][\w-]*)[^>]*>.*?</\1>',re.S)
 
 def claude_home():return Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home()/'.claude')
 def codex_home():return Path(os.environ.get('CODEX_HOME') or Path.home()/'.codex')
@@ -73,36 +81,62 @@ def merge_spans(spans):
         x['first']=min(x['first'],s['first']);x['last']=max(x['last'],s['last'])
     return list(g.values())
 
-def claude_calls(path):
-    """[(time, usage)] per API call of a Claude Code transcript. One response is written as several lines
-    carrying the same usage, so calls are deduplicated by message.id."""
-    calls,meta={},{'title':None,'first':None,'last':None}
+def _commands(text,t):
+    return [(t,sub,rid or None) for sub,rid in CMD_RE.findall(text) if sub in ROUND_CMDS]
+
+def _prompt_text(content):
+    text=content if isinstance(content,str) else ' '.join(x.get('text','') for x in content if isinstance(x,dict) and x.get('type')=='text')
+    tags=re.findall(r'<([a-z][\w-]*)',text);rest=' '.join(TAG_RE.sub(' ',text).split())
+    return rest[:60] or (f'({tags[0]})' if tags else '')
+
+def claude_log(path):
+    """Calls [(time, usage)] deduplicated by message.id (one response is written as several lines carrying
+    the same usage), user turns [(start, prompt)], harness commands [(time, subcommand, round)]."""
+    calls,turns,cmds,meta={},[],[],{'title':None,'first':None,'last':None}
     for d in lines(path):
-        t=d.get('timestamp')
+        t=d.get('timestamp');m=d.get('message')
         if t:meta['first']=meta['first'] or t;meta['last']=t
         if d.get('type')=='ai-title':meta['title']=d.get('aiTitle')
-        m=d.get('message')
-        if d.get('type')=='assistant' and isinstance(m,dict) and m.get('usage') and m.get('model')!='<synthetic>':
+        if not isinstance(m,dict):continue
+        c=m.get('content')
+        if d.get('type')=='user' and not d.get('isMeta') and not d.get('isCompactSummary') and (isinstance(c,str) or (isinstance(c,list) and not any(
+                isinstance(x,dict) and x.get('type')=='tool_result' for x in c))):
+            turns.append((parse_ts(t),_prompt_text(c)))
+        if d.get('type')!='assistant':continue
+        if m.get('usage') and m.get('model')!='<synthetic>':
             calls.setdefault(m.get('id') or d.get('uuid'),(parse_ts(t),claude_usage(m['usage'])))
-    return list(calls.values()),meta
+        for x in c or []:
+            if isinstance(x,dict) and x.get('type')=='tool_use' and isinstance(x.get('input'),dict):
+                cmds+=_commands(str(x['input'].get('command','')),parse_ts(t))
+    turns.sort(key=lambda x:x[0] or dt.datetime.min.replace(tzinfo=dt.timezone.utc))  # file order is not time order
+    return {'calls':list(calls.values()),'turns':turns,'cmds':cmds,**meta}
+
+def claude_calls(path):
+    log=claude_log(path);return log['calls'],log
 
 def codex_calls(path):
     """[(time, usage)] per model call of a codex rollout (differences of the cumulative token_count),
-    session metadata, and limit observations."""
-    calls,limits,prev,meta=[],[],None,{}
+    session metadata (with turns and harness commands), and limit observations."""
+    calls,limits,prev,meta=[],[],None,{'turns':[],'cmds':[]}
     for d in lines(path):
-        p=d.get('payload') if isinstance(d.get('payload'),dict) else {}
+        p=d.get('payload') if isinstance(d.get('payload'),dict) else {};t=d.get('timestamp')
         if d.get('type')=='session_meta':
-            meta={'cwd':p.get('cwd',''),'originator':p.get('originator'),'first':d.get('timestamp'),'last':d.get('timestamp')}
+            meta.update(cwd=p.get('cwd',''),originator=p.get('originator'),first=t,last=t)
+        if d.get('type')=='event_msg' and p.get('type')=='task_started':meta['turns'].append((parse_ts(t),''))
+        if d.get('type')=='event_msg' and p.get('type')=='user_message' and meta['turns']:
+            meta['turns'][-1]=(meta['turns'][-1][0],' '.join(str(p.get('message','')).split())[:60])
+        if d.get('type')=='response_item' and p.get('type') not in ('message','reasoning','additional_tools'):
+            meta['cmds']+=_commands(json.dumps(p,ensure_ascii=False),parse_ts(t))
         if p.get('type')!='token_count':continue
-        meta['last']=d.get('timestamp')
+        meta['last']=t
         limits+=_codex_limits(p.get('rate_limits'))
         if not p.get('info'):continue
         cum=codex_usage(p['info'].get('total_token_usage') or {})
         delta=cum if prev is None else {k:cum[k]-prev[k] for k in KEYS}
         if any(v<0 for v in delta.values()):delta=codex_usage(p['info'].get('last_token_usage') or {})
         prev=cum
-        if any(delta.values()):calls.append((parse_ts(d.get('timestamp')),delta))
+        if any(delta.values()):calls.append((parse_ts(t),delta))
+    meta['turns'].sort(key=lambda x:x[0] or dt.datetime.min.replace(tzinfo=dt.timezone.utc))
     return calls,meta,limits
 
 def collect_codex_rollout(jdir):
@@ -159,19 +193,20 @@ def project_dir(root):
     return claude_home()/'projects'/re.sub(r'[^A-Za-z0-9]','-',str(Path(root).resolve()))
 
 def sessions(root,since=None):
-    """Interactive Claude Code / Codex sessions started in this repository (workers excluded).
-    since: skip files last written before this POSIX time."""
+    """Interactive Claude Code / Codex sessions started in this repository (workers excluded):
+    [{source, owner, title, first, last, calls, turns, cmds}]. A subagent entry has the parent session as owner
+    and shares its turns. since: skip files last written before this POSIX time."""
     root=Path(root).resolve();res=[];pd=project_dir(root)
     old=lambda f:since is not None and f.stat().st_mtime<since
     if pd.is_dir():
         for f in sorted(pd.glob('*.jsonl')):
             if old(f):continue
-            calls,meta=claude_calls(f);sid=f.stem[:8]
-            res.append({'source':'claude:'+sid,'title':meta['title'],'first':meta['first'],'last':meta['last'],'calls':calls})
+            log=claude_log(f);src='claude:'+f.stem[:8]
+            res.append({'source':src,'owner':src,**log})
             subs=sorted((pd/f.stem/'subagents').glob('*.jsonl'))
-            sub=[c for s in subs for c in claude_calls(s)[0]]
-            if sub:res.append({'source':f'claude:{sid}/sub','title':f'subagents of {sid} ({len(subs)})',
-                               'first':meta['first'],'last':meta['last'],'calls':sub})
+            sub=[c for s in subs for c in claude_log(s)['calls']]
+            if sub:res.append({'source':src+'/sub','owner':src,'title':f'subagents of {src} ({len(subs)})',
+                               'first':log['first'],'last':log['last'],'calls':sub,'turns':log['turns'],'cmds':[]})
     sd=codex_home()/'sessions';runs=str(root/'runs')+os.sep
     if sd.is_dir():
         for f in sorted(sd.rglob('rollout-*.jsonl')):
@@ -180,8 +215,9 @@ def sessions(root,since=None):
             if str(root) not in head:continue  # session_meta (first line) holds cwd
             calls,meta,_=codex_calls(f);cwd=meta.get('cwd','')
             if not (cwd==str(root) or cwd.startswith(str(root)+os.sep)) or cwd.startswith(runs):continue
-            res.append({'source':'codex:'+f.stem.split('-')[-1][:8],'title':f"{meta.get('originator')} {cwd[len(str(root)):] or '/'}",
-                        'first':meta.get('first'),'last':meta.get('last'),'calls':calls})
+            src='codex:'+f.stem.split('-')[-1][:8]
+            res.append({'source':src,'owner':src,'title':f"{meta.get('originator')} {cwd[len(str(root)):] or '/'}",
+                        'first':meta.get('first'),'last':meta.get('last'),'calls':calls,'turns':meta['turns'],'cmds':meta['cmds']})
     return res
 
 def rounds(root):
@@ -193,13 +229,52 @@ def rounds(root):
                    'closed':parse_ts(state.get('closed_at')),'dir':rd})
     return rs
 
-def round_of(t,rs):
-    """Round that an interactive call belongs to: R(n) covers (close of R(n-1), close of R(n)]."""
-    if t is None or not rs:return '(不明)'
-    if t<rs[0]['created']:return '(準備)'
+def _turn(turns,t):
+    """Index of the turn that contains time t (turns are sorted by start)."""
+    return bisect.bisect_right([x[0] for x in turns],t)-1 if t else -1
+
+def round_spans(rs,sess):
+    """Per round: owners (sessions that ran its harness commands), begin, end (close), and the turn that ran close.
+    begin is the start of the turn that ran prepare; when that session ran no earlier round (a session started
+    for this round), it is the start of the session's first turn. Never before the previous close."""
+    info={r['id']:{'owners':set(),'begin':None,'end':r['closed'],'close_turn':None,'prep':None,'prep_first':None} for r in rs}
+    for s in sess:
+        if s['owner']!=s['source']:continue
+        for t,sub,rid in s['cmds']:
+            if t is None:continue
+            if sub in ('prepare','round') and not rid:  # the round it created starts within 10 minutes
+                rid=next((r['id'] for r in rs if r['created'] and 0<=(r['created']-t).total_seconds()<=600),None)
+                if rid:
+                    k=_turn(s['turns'],t);start=s['turns'][k][0] if k>=0 else t
+                    p=info[rid]['prep'];info[rid]['prep']=start if p is None else min(p,start)
+                    info[rid]['prep_session']=s['source'];info[rid]['prep_first']=s['turns'][0][0] if s['turns'] else start
+            if rid in info:
+                info[rid]['owners'].add(s['source'])
+                if sub=='close':info[rid]['close_turn']=(s['source'],_turn(s['turns'],t))
+    prev=None;seen=set()
     for r in rs:
-        if r['closed'] is None or t<=r['closed']:return r['id']
-    return '(次のラウンド)'
+        x=info[r['id']];b=x['prep'] or r['created']
+        if x.get('prep_session') and x['prep_session'] not in seen:b=x['prep_first']
+        seen|=x['owners']
+        x['begin']=max(b,prev) if prev and b else (b or prev)
+        prev=r['closed'] or prev
+    return info
+
+def attribute(rs,sess,info=None):
+    """[(round or OUTSIDE, source, turn index, time, usage)] for every interactive call."""
+    info=info or round_spans(rs,sess);ids=[r['id'] for r in rs];by={s['source']:s for s in sess};out=[]
+    for s in sess:
+        owner=by.get(s['owner'],s)
+        for t,u in s['calls']:
+            k=_turn(owner['turns'],t);rid=OUTSIDE
+            for i,r in enumerate(ids):
+                x=info[r]
+                if s['owner'] not in x['owners'] or t is None or not x['begin']:continue
+                if x['begin']<=t and (x['end'] is None or t<=x['end']):rid=r;break
+                nxt=info[ids[i+1]]['begin'] if i+1<len(ids) else None
+                if x['close_turn']==(s['owner'],k) and t>x['end'] and (nxt is None or t<=nxt):rid=r;break  # report after close
+            out.append((rid,s['source'],k,t,u))
+    return out
 
 def worker_rows(rd):
     rows={}
@@ -213,19 +288,35 @@ def worker_rows(rd):
     return rows
 
 def round_snapshot(root,rid):
-    """Usage of one closed round, written to runs/<rid>/usage.json by close (transcripts expire later)."""
+    """Usage of one round, written to runs/<rid>/usage.json (transcripts in ~/.claude expire).
+    final is false until a later round exists: the report after close may still be running."""
     rs=rounds(root);ids=[r['id'] for r in rs];i=ids.index(rid)
     start=rs[i-1]['closed'] if i else None
-    sess={}
-    for s in sessions(root,since=start.timestamp() if start else None):
-        calls=[u for t,u in s['calls'] if round_of(t,rs)==rid]
-        if calls:sess[s['source']]={**total(calls),'title':s['title']}
+    sess=sessions(root,since=start.timestamp() if start else None)
+    info=round_spans(rs,sess);x=info[rid]
+    orch={}
+    for r,src,_,_,u in attribute(rs,sess,info):
+        if r==rid:orch.setdefault(src,[]).append(u)
+    titles={s['source']:s['title'] for s in sess}
     workers=worker_rows(rs[i]['dir']);used=[w['usage'] for w in workers.values() if w['usage']]
-    return {'round_id':rid,'mode':rs[i]['mode'],
-            'window':{'from':start.isoformat() if start else rs[i]['created'].isoformat(),
-                      'to':rs[i]['closed'].isoformat() if rs[i]['closed'] else None},
-            'sessions':sess,
+    iso=lambda t:t.isoformat() if t else None
+    return {'round_id':rid,'mode':rs[i]['mode'],'final':i+1<len(rs),
+            'span':{'from':iso(x['begin']),'close':iso(x['end'])},'owners':sorted(x['owners']),
+            'orchestrator':{src:{**total(us),'title':titles.get(src)} for src,us in orch.items()},
             'workers_total':{k:sum(u[k] for u in used) for k in KEYS},
             'workers_without_usage':sum(1 for w in workers.values() if not w['usage']),
             'worker_limits':merge_spans([s for u in used for s in u.get('limits') or []]),
             'workers':workers}
+
+def save_snapshots(root,upto=None):
+    """Write usage.json for closed rounds that lack one or whose snapshot is not final. Returns written ids."""
+    written=[]
+    for r in rounds(root):
+        if not r['closed'] or (upto and r['id']>upto):continue
+        p=r['dir']/'usage.json'
+        try:old=json.loads(p.read_text())
+        except (OSError,ValueError):old=None
+        if old and old.get('final') and 'orchestrator' in old:continue
+        from .util import write_json
+        write_json(p,round_snapshot(root,r['id']));written.append(r['id'])
+    return written

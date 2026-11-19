@@ -123,13 +123,15 @@ python3 scripts/codex_limits.py                  # 5時間枠と週間枠の使�
 R0012 から、どちらの engine でも worker のトークンが呼び出しごとに残る。
 
 - `job.json`：engine・モデル・effort と `usage`（呼び出し回数、区分ごとのトークン、最大の文脈、利用上限の使用率の始めと終わり）
-- `runs/R####/usage.json`：close のときに、そのラウンドの対話セッション（オーケストレーターなど）と worker の消費を書く。`~/.claude` の記録は既定で30日で消えるため
+- `runs/R####/usage.json`：close のときに、そのラウンドのオーケストレーターと worker の消費を書く。`~/.claude` の記録は既定で30日で消えるため。close のあとの報告を含めるため、次のラウンドの close のときに確定する（`final`）
+- 対話セッションの呼び出しは、ラウンドの作業のときだけ、そのラウンドに数える。そのラウンドの `thin.cli` コマンドを実行したセッションで、「prepare を実行したターンの開始」から「close を実行したターンの終わり」までの呼び出しが対象。そのラウンドのために始めたセッション（それより前のラウンドを実行していないセッション）は、最初のターンから数える。それ以外（ラウンドの合間の相談、ドキュメント整備、別セッションの作業）は「ラウンド外」に数える
 - 区分は in（キャッシュなし入力）・cw（キャッシュ書き込み）・cr（キャッシュ読み出し）・out（出力、思考を含む）・think（そのうち思考）。ドル換算はしない
 
 ```sh
 python3 scripts/token_report.py               # ラウンド×発生源の表
 python3 scripts/token_report.py --jobs R0012  # worker ごと
-python3 scripts/token_report.py --save        # usage.json の無い閉じたラウンドに書き出す
+python3 scripts/token_report.py --outside     # ラウンド外をターンごとに
+python3 scripts/token_report.py --save        # usage.json を書く（無いもの、確定していないもの）
 ```
 
 R0001〜R0011 の集計結果は [docs/レポート/トークン計測レポート.html](docs/レポート/トークン計測レポート.html) にある。

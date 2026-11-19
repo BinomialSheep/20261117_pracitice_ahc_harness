@@ -295,7 +295,7 @@ def close(root,rid):
         elif state['phase']!='evaluated':
             raise ThinError('Evaluate or finish a fully failed round before closing')
         state.update(phase='closed',closed_at=now());write_json(rd/'state.json',state)
-    try:write_json(rd/'usage.json',usage.round_snapshot(root,rd.name))  # transcripts in ~/.claude expire
+    try:usage.save_snapshots(root,upto=rd.name)  # this round, and finalizes the previous one
     except Exception as e:write_json(rd/'usage.json',{'error':f'{type(e).__name__}: {e}'[:300]})
     return state
 

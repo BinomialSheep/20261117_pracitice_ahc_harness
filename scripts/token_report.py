@@ -2,22 +2,24 @@
 """トークン使用量を、ラウンド別・発生源別に集計する（読み取りだけ。--save のときだけ usage.json を書く）。
 
 読む記録（集計の中身は thin/usage.py）:
-- 対話セッション（オーケストレーターなど）
-  - Claude Code: ~/.claude/projects/<このリポジトリ>/*.jsonl と <セッション>/subagents/*.jsonl
-  - Codex: ~/.codex/sessions/**/rollout-*.jsonl のうち、cwd がこのリポジトリの中（runs/ を除く）のもの
-- worker: runs/R####/jobs/*/
-  - job.json の usage（run-workers が終了時に書く）。無ければ次から読む
-  - codex_rollout.jsonl（codex の呼び出しごとの記録。run-workers が ~/.codex/sessions から移す）
-  - agent.stdout（claude の stream-json、codex の --json。claude のテキスト出力は「記録なし」）
+- 対話セッション：Claude Code の ~/.claude/projects/<このリポジトリ>/*.jsonl（subagents/ を含む）と、
+  Codex の ~/.codex/sessions/**/rollout-*.jsonl（cwd がこのリポジトリの中。runs/ を除く）
+- worker：runs/R####/jobs/*/ の job.json の usage。無ければ codex_rollout.jsonl か agent.stdout
 
-対話セッションの消費は時刻でラウンドに割り当てる。R(n) の区間は「R(n-1) を close してから R(n) を close するまで」。
-区分は in=キャッシュなし入力、cw=キャッシュ書き込み、cr=キャッシュ読み出し、out=出力（思考を含む）、think=out のうち思考、
-ctx=1回の呼び出しで読んだ入力の最大値。ドル換算はしない。
+対話セッションの呼び出しは、ラウンドの作業のときだけそのラウンドに数える。条件は2つ。
+1. そのラウンドの thin.cli コマンド（prepare〜close）を実行したセッションであること
+2. 「prepare を実行したターンの開始」から「close を実行したターンの終わり」までの呼び出しであること
+それ以外（ラウンドの合間の質問、ドキュメント整備、別セッションでの作業など）は「ラウンド外」に数え、
+--outside でターンごとに見られる。
 
-    python3 scripts/token_report.py               # ラウンド×発生源の表と、セッションの凡例
-    python3 scripts/token_report.py --jobs R0009  # そのラウンドの worker ごと
+区分は in=キャッシュなし入力、cw=キャッシュ書き込み、cr=キャッシュ読み出し、out=出力（思考を含む）、
+think=out のうち思考、ctx=1回の呼び出しで読んだ入力の最大値。ドル換算はしない。
+
+    python3 scripts/token_report.py               # ラウンド×発生源の表、ラウンド外のセッション別合計、凡例
+    python3 scripts/token_report.py --outside     # ラウンド外をターンごとに
+    python3 scripts/token_report.py --jobs R0012  # そのラウンドの worker ごと
     python3 scripts/token_report.py --json        # 機械向け
-    python3 scripts/token_report.py --save        # usage.json の無い閉じたラウンドに書き出す（close は自動で書く）
+    python3 scripts/token_report.py --save        # usage.json を書く（無いもの、確定していないもの）
 """
 import collections
 import json
@@ -27,28 +29,36 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from thin import usage as U  # noqa: E402
-from thin.util import write_json  # noqa: E402
 
 KEYS = U.KEYS
 
 
+def fmt(n):
+    if not n:
+        return "-" if n is None else "0"
+    return f"{n / 1e6:.2f}M" if n >= 1e6 else (f"{n / 1e3:.0f}k" if n >= 1e3 else str(n))
+
+
+def local(t):
+    return t.astimezone().strftime("%m-%d %H:%M") if t else "?"
+
+
 def collect():
     rs = U.rounds(ROOT)
+    sess = U.sessions(ROOT)
+    info = U.round_spans(rs, sess)
+    calls = U.attribute(rs, sess, info)
     rows = collections.defaultdict(lambda: {"calls": 0, **{k: 0 for k in KEYS}, "peak_ctx": 0})
     notes = collections.defaultdict(list)
-    legend = []
-    for s in U.sessions(ROOT):
-        by_round = collections.defaultdict(list)
-        for t, u in s["calls"]:
-            by_round[U.round_of(t, rs)].append(u)
-        for rid, us in by_round.items():
-            rows[(rid, s["source"])] = U.total(us)
-        legend.append((s["source"], s["first"], s["last"], s["title"] or ""))
+    grouped = collections.defaultdict(list)
+    for rid, src, k, t, u in calls:
+        grouped[(rid, src)].append(u)
+    for key, us in grouped.items():
+        rows[key] = U.total(us)
     jobs = []
     for r in rs:
-        workers = U.worker_rows(r["dir"])
         spans = collections.defaultdict(list)
-        for jid, w in workers.items():
+        for jid, w in U.worker_rows(r["dir"]).items():
             jobs.append({"round": r["id"], "job": jid, **w})
             src = f"worker:{w['engine']}" if w["usage"] else "worker:記録なし"
             row = rows[(r["id"], src)]
@@ -63,37 +73,55 @@ def collect():
         for src, sp in spans.items():
             for s in U.merge_spans(sp):
                 notes[(r["id"], src)].append(f"{s['window']} {s['first']:.0f}→{s['last']:.0f}%")
-    return rs, rows, notes, legend, jobs
+    # ラウンド外をターンごとに
+    by = {s["source"]: s for s in sess}
+    turns = collections.defaultdict(list)
+    for rid, src, k, t, u in calls:
+        if rid == U.OUTSIDE:
+            turns[(by[src]["owner"], k)].append((t, u))
+    outside = []
+    for (owner, k), tu in turns.items():
+        tl = by[owner]["turns"]
+        start, prompt = tl[k] if 0 <= k < len(tl) else (min(t for t, _ in tu), "")
+        outside.append({"session": owner, "start": start, "prompt": prompt, **U.total([u for _, u in tu])})
+    outside.sort(key=lambda x: (x["start"] is None, x["start"]))
+    legend = [(s["source"], s["first"], s["last"], s["title"] or "") for s in sess]
+    return rs, info, rows, notes, legend, jobs, outside
 
 
-def fmt(n):
-    if not n:
-        return "-" if n is None else "0"
-    return f"{n / 1e6:.2f}M" if n >= 1e6 else (f"{n / 1e3:.0f}k" if n >= 1e3 else str(n))
+def line(label, src, r, note=""):
+    return (f"{label:<8}{src:<22}{r['calls'] or '-':>6}{fmt(r['in']):>8}{fmt(r['cw']):>8}{fmt(r['cr']):>9}"
+            f"{fmt(r['out']):>8}{fmt(r['think']):>8}{fmt(r['peak_ctx'] or None):>7}  {note}")
 
 
-def print_table(rs, rows, notes, legend):
-    order = {r["id"]: i + 1 for i, r in enumerate(rs)}
-    modes = {r["id"]: r["mode"] for r in rs}
-    key = lambda k: (order.get(k[0], 0 if k[0] == "(準備)" else 10**6), k[1])
+def print_table(rs, info, rows, notes, legend):
     hdr = f"{'round':<8}{'source':<22}{'calls':>6}{'in':>8}{'cw':>8}{'cr':>9}{'out':>8}{'think':>8}{'ctx':>7}  note"
     print(hdr)
     print("-" * len(hdr))
-    last, total = None, collections.defaultdict(collections.Counter)
-    for rid, src in sorted(rows, key=key):
-        r = rows[(rid, src)]
-        note = " ".join(([f"jobs={r['jobs']}"] if "jobs" in r else []) + notes.get((rid, src), []))
-        label = f"{rid} {modes.get(rid, '')}".strip() if rid != last else ""
-        if src == "worker:記録なし":
-            print(f"{label:<8}{src:<22}{'-':>6}{'':>48}  {note}")
-        else:
-            print(f"{label:<8}{src:<22}{r['calls'] or '-':>6}{fmt(r['in']):>8}{fmt(r['cw']):>8}{fmt(r['cr']):>9}"
-                  f"{fmt(r['out']):>8}{fmt(r['think']):>8}{fmt(r['peak_ctx'] or None):>7}  {note}")
-        last = rid
-        kind = src.split(":")[0] + (":sub" if src.endswith("/sub") else "")
+    for r in rs:
+        keys = sorted(k for k in rows if k[0] == r["id"])
+        x = info[r["id"]]
+        span = f"{local(x['begin'])}〜{local(x['end'])}"
+        if not any(not k[1].startswith("worker:") for k in keys):
+            span += " オーケストレーター不明"
+        print(f"{r['id']} {r['mode']}  {span}")
+        for _, src in keys:
+            row = rows[(r["id"], src)]
+            note = " ".join(([f"jobs={row['jobs']}"] if "jobs" in row else []) + notes.get((r["id"], src), []))
+            if src == "worker:記録なし":
+                print(f"{'':<8}{src:<22}{'-':>6}{'':>48}  {note}")
+            else:
+                print(line("", src, row, note))
+    out = sorted(k for k in rows if k[0] == U.OUTSIDE)
+    print(f"\n{U.OUTSIDE}（ラウンドの作業でない呼び出し。--outside でターンごと）")
+    for _, src in out:
+        print(line("", src, rows[(U.OUTSIDE, src)]))
+    total = collections.defaultdict(collections.Counter)
+    for (rid, src), r in rows.items():
+        kind = ("ラウンド外" if rid == U.OUTSIDE else ("worker" if src.startswith("worker:") else "ラウンド内の対話"))
         total[kind].update({k: r[k] for k in ("calls",) + KEYS})
-    print("\n合計（codex の worker は呼び出し回数が分からない分を含まない）")
-    for kind, c in sorted(total.items()):
+    print("\n合計（codex の worker の旧形式は呼び出し回数が分からない）")
+    for kind, c in total.items():
         print(f"  {kind:<12} calls={c['calls']} " + " ".join(f"{k}={fmt(c[k])}" for k in KEYS))
     print("\n凡例")
     for src, first, last_, title in legend:
@@ -101,16 +129,19 @@ def print_table(rs, rows, notes, legend):
 
 
 def main():
-    rs, rows, notes, legend, jobs = collect()
     if "--save" in sys.argv:
-        for r in rs:
-            p = r["dir"] / "usage.json"
-            if r["closed"] and not p.exists():
-                write_json(p, U.round_snapshot(ROOT, r["id"]))
-                print(f"wrote {p.relative_to(ROOT)}")
-    elif "--json" in sys.argv:
+        for rid in U.save_snapshots(ROOT):
+            print(f"wrote runs/{rid}/usage.json")
+        return
+    rs, info, rows, notes, legend, jobs, outside = collect()
+    if "--json" in sys.argv:
         print(json.dumps({"rows": [{"round": k[0], "source": k[1], **v, "notes": notes.get(k, [])} for k, v in rows.items()],
-                          "workers": jobs, "legend": legend}, ensure_ascii=False, indent=1, default=str))
+                          "spans": {k: {**v, "owners": sorted(v["owners"])} for k, v in info.items()},
+                          "workers": jobs, "outside": outside, "legend": legend}, ensure_ascii=False, indent=1, default=str))
+    elif "--outside" in sys.argv:
+        for o in outside:
+            print(f"{local(o['start'])}  {o['session']:<18}{o['calls']:>4}回 cr={fmt(o['cr']):<7} out={fmt(o['out']):<6} "
+                  f"ctx={fmt(o['peak_ctx']):<6} {o['prompt']}")
     elif "--jobs" in sys.argv:
         rid = sys.argv[sys.argv.index("--jobs") + 1]
         for j in jobs:
@@ -120,7 +151,7 @@ def main():
                 print(head + (f"calls={u['calls'] or '-'} " + " ".join(f"{k}={fmt(u[k])}" for k in KEYS)
                               + f" ctx={fmt(u['peak_ctx'])}" if u else "記録なし"))
     else:
-        print_table(rs, rows, notes, legend)
+        print_table(rs, info, rows, notes, legend)
 
 
 if __name__ == "__main__":

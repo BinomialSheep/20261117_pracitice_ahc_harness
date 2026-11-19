@@ -72,22 +72,53 @@ class Usage(unittest.TestCase):
         self.assertEqual(_engine_settings(['claude','-p','--model','x','--effort','high']),{'model':'x','effort':'high'})
         self.assertEqual(_engine_settings(['codex','exec','-m','y','-c','model_reasoning_effort="low"']),{'model':'y','effort':'low'})
 
-    def test_sessions_are_assigned_to_rounds_by_close_time(self):
-        root=self.d/'repo';
-        for rid,created,closed in (('R0001','2026-11-19T01:00:00+00:00','2026-11-19T02:00:00+00:00'),
-                                   ('R0002','2026-11-19T03:00:00+00:00','2026-11-19T04:00:00+00:00')):
+    def _repo(self,rounds):
+        root=self.d/'repo'
+        for rid,created,closed in rounds:
             (root/'runs'/rid/'jobs').mkdir(parents=True)
             (root/'runs'/rid/'plan.json').write_text(json.dumps({'mode':'B','created_at':created}))
             (root/'runs'/rid/'state.json').write_text(json.dumps({'phase':'closed','closed_at':closed}))
-        pd=U.project_dir(root)
+        return root
+
+    def _session(self,root,name,events):
+        """events: ('prompt', ts, text) | ('call', ts, id, cache_read, bash_command_or_None)"""
         rows=[]
-        for i,ts in enumerate(('2026-11-19T00:30:00Z','2026-11-19T01:30:00Z','2026-11-19T02:30:00Z','2026-11-19T05:00:00Z')):
-            m=claude_msg(f'm{i}',1,0,100*(i+1),1);m['timestamp']=ts;rows+= [m,m]
-        jsonl(pd/'s1.jsonl',rows)
-        rs=U.rounds(root)
-        self.assertEqual([U.round_of(t,rs) for t,_ in U.sessions(root)[0]['calls']],['(準備)','R0001','R0002','(次のラウンド)'])
-        snap=U.round_snapshot(root,'R0002')
-        self.assertEqual(snap['sessions']['claude:s1']['cr'],300)
-        self.assertEqual(snap['window'],{'from':'2026-11-19T02:00:00+00:00','to':'2026-11-19T04:00:00+00:00'})
+        for e in events:
+            if e[0]=='prompt':rows.append({'type':'user','timestamp':e[1],'message':{'role':'user','content':e[2]}})
+            else:
+                m=claude_msg(e[2],1,0,e[3],1);m['timestamp']=e[1]
+                if e[4]:m['message']['content']=[{'type':'tool_use','name':'Bash','input':{'command':e[4]}}]
+                rows+=[m,m]
+        jsonl(U.project_dir(root)/f'{name}.jsonl',rows)
+
+    def test_only_round_work_of_the_running_session_counts(self):
+        root=self._repo([('R0001','2026-11-19T01:00:30+00:00','2026-11-19T02:00:00+00:00'),
+                         ('R0002','2026-11-19T04:00:30+00:00','2026-11-19T05:00:00+00:00')])
+        py='.venv/bin/python -m thin.cli '
+        self._session(root,'orch',[
+            ('prompt','2026-11-19T00:50:00Z','understand the repo'),('call','2026-11-19T00:51:00Z','a',100,None),
+            ('prompt','2026-11-19T01:00:00Z','start'),('call','2026-11-19T01:00:10Z','b',200,py+'prepare B --idea x'),
+            ('call','2026-11-19T01:59:00Z','c',300,py+'close R0001'),('call','2026-11-19T02:00:30Z','d',400,None),
+            ('prompt','2026-11-19T03:00:00Z','check the docs'),('call','2026-11-19T03:01:00Z','e',500,None),
+            ('prompt','2026-11-19T04:00:00Z','next'),('call','2026-11-19T04:00:10Z','f',600,py+'prepare B --idea y'),
+            ('call','2026-11-19T04:59:00Z','g',700,py+'close R0002')])
+        self._session(root,'other',[('prompt','2026-11-19T01:30:00Z','measure tokens'),('call','2026-11-19T01:31:00Z','h',800,None)])
+        # compaction summary: written after later prompts but stamped earlier; it is not a turn
+        jsonl(U.project_dir(root)/'late.jsonl',[{'type':'user','timestamp':'2026-11-19T04:30:00Z','message':{'content':'q'}},
+              {'type':'user','isCompactSummary':True,'timestamp':'2026-11-19T00:00:00Z','message':{'content':'summary'}}])
+        rs=U.rounds(root);sess=U.sessions(root);info=U.round_spans(rs,sess)
+        got={(src,u['cr']):r for r,src,_,_,u in U.attribute(rs,sess,info)}
+        self.assertEqual(info['R0001']['owners'],{'claude:orch'})
+        self.assertEqual(got,{('claude:orch',100):'R0001',  # first turns of a session started for R0001
+                              ('claude:orch',200):'R0001',('claude:orch',300):'R0001',
+                              ('claude:orch',400):'R0001',  # report after close, same turn
+                              ('claude:orch',500):U.OUTSIDE,  # another task between rounds
+                              ('claude:orch',600):'R0002',('claude:orch',700):'R0002',
+                              ('claude:other',800):U.OUTSIDE})  # another session during the round
+        self.assertEqual([t[1] for t in next(s for s in sess if s['source']=='claude:late')['turns']],['q'])
+        snap=U.round_snapshot(root,'R0001')
+        self.assertEqual((snap['final'],snap['orchestrator']['claude:orch']['cr']),(True,1000))
+        self.assertFalse(U.round_snapshot(root,'R0002')['final'])
+        self.assertEqual(U.save_snapshots(root),['R0001','R0002']);self.assertEqual(U.save_snapshots(root),['R0002'])
 
 if __name__=='__main__':unittest.main()
