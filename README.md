@@ -41,9 +41,10 @@ https://www.youtube.com/watch?v=8HT49Qb9dYA
 | `problem/tools/bin/`                                                                                  | 公式ツールのビルド済みバイナリ（Git管理外、`scripts/build_tools.sh` で生成）                                                                                                                                                                                                                                                                                                                                            |
 | `scripts/build_tools.sh`                                                                              | 公式ツールをビルドして `problem/tools/bin/` に置く                                                                                                                                                                                                                                                                                                                                                                      |
 | `scripts/codex_limits.py`, `scripts/codex_audit.py`                                                   | Codex の利用上限を読む／codex worker の行動を監査する                                                                                                                                                                                                                                                                                                                                                                   |
+| `scripts/token_report.py`, `thin/usage.py` | トークン使用量をラウンド別・発生源別に集計する（読み取りだけ）。worker ごとの記録と、close 時の `runs/R####/usage.json` も `thin/usage.py` が作る |
 | `tests/test_problem.py`                                                                               | judgeアダプタとハーネス接続のテスト                                                                                                                                                                                                                                                                                                                                                                                     |
 | `docs/TEMPLATE_FEEDBACK.md`                                                                           | 雛形作成担当に渡す、問題によらないフィードバック                                                                                                                                                                                                                                                                                                                                                                        |
-| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から）。codex が親ディレクトリの `AGENTS.md` を読みにいくので、各作業場所に短い `AGENTS.md` を置き、task.md に外を読まない1行を足した（R0009から） |
+| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から）。codex が親ディレクトリの `AGENTS.md` を読みにいくので、各作業場所に短い `AGENTS.md` を置き、task.md に外を読まない1行を足した（R0009から）。トークンを記録するため `thin/usage.py` を足し、`thin/core.py` の worker 終了時と close に記録を加えた（R0012から） |
 | `FILE_MANIFEST.json`                                                                                  | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない                                                                                                                                                                                                                                                                                                                                                      |
 | `runs/`, `best/`                                                                                      | ラウンド実行時に作られる（Git管理外）                                                                                                                                                                                                                                                                                                                                                                                   |
 
@@ -90,6 +91,7 @@ scripts/build_tools.sh            # 公式ツール（Rust）をビルドして 
 - `--permission-mode acceptEdits --permission-prompts none`：ファイル編集は許可する。許可リストにないコマンドは確認せずに拒否する。
 - `--allowedTools`：`python3 quickcheck.py` と `g++` だけを許可する。Aでseed0以外を走らせないため。
 - `--disallowedTools WebSearch WebFetch`：過去問のルールを守るため。
+- `--output-format stream-json --verbose`：トークンを記録するため（R0012から）。`agent.stdout` は、API呼び出しごとの usage と利用上限の使用率（`rate_limit_event`）を含む JSONL になる。最終メッセージは `agent.last_message.md` に書き出す。
 
 R0001（Bラウンド1体）で動作を確かめ、R0002から10並列のAも使っている。サブスクの利用上限に注意する（[docs/TEMPLATE_FEEDBACK.md](docs/TEMPLATE_FEEDBACK.md) の9）。
 
@@ -99,8 +101,9 @@ R0001（Bラウンド1体）で動作を確かめ、R0002から10並列のAも�
 - `-m gpt-6.2-sol`、`-c model_reasoning_effort="high"`：モデルとeffortを固定する。不正な値は終了コード1で止まる。
 - `-c web_search="disabled"` と `--disable apps plugins remote_plugin browser_use browser_use_external in_app_browser`（実際は1つずつ `--disable` を付ける）：Webに届く道具を外す。`web_search` を切るだけでは、ChatGPTの連携アプリ（`codex_apps` のMCP）の検索で調べられた。全部付けると、モデルは「Webの道具が無い」と答えた。
 - `--disable multi_agent`：効果は確かめていない。セッション記録のツール一覧には `spawn_agent` などが残った。
+- `--disable memories`：過去のセッションの要約を次の worker に渡さないため。既定でも無効だが、セッション記録を残すようにしたので明示した（R0012から）。
 - `--sandbox workspace-write`：書き込めるのは workspace と `/tmp` だけで、ネットワークも使えない（`codex sandbox` で確認済み）。読み取りはディスク全体でできる。
-- `--ephemeral`：セッション記録を残さない。
+- `--ephemeral` は外した（R0012から）。付けると、20分の上限で止められた worker のトークンが何も残らない。worker が終わると、`run-workers` がそのセッション記録を `~/.codex/sessions` から `jobs/<id>/codex_rollout.jsonl` へ移す。ただし Codex の SQLite（`~/.codex/state_5.sqlite` と `thread_history_1.sqlite`）には、スレッドのタイトル（task.md の冒頭）と中身が残る。worker は読み取りを制限されないので読もうと思えば読めるが、`runs/` も同じく読める。
 - `--json`：行動のイベント列を `agent.stdout` に残す。
 
 worker と同じ形（`git init` した workspace）では、リポジトリの `AGENTS.md` は渡らない。リポジトリ直下から起動すると渡る。どちらもセッション記録（`~/.codex/sessions`）で確認した。
@@ -114,6 +117,22 @@ python3 scripts/codex_limits.py                  # 5時間枠と週間枠の使�
 ```
 
 `codex_limits.py` は `codex app-server` に読み取りのメソッドしか送らない。リセット権を消費するメソッドは送れないようにしてある。
+
+### トークンの記録
+
+R0012 から、どちらの engine でも worker のトークンが呼び出しごとに残る。
+
+- `job.json`：engine・モデル・effort と `usage`（呼び出し回数、区分ごとのトークン、最大の文脈、利用上限の使用率の始めと終わり）
+- `runs/R####/usage.json`：close のときに、そのラウンドの対話セッション（オーケストレーターなど）と worker の消費を書く。`~/.claude` の記録は既定で30日で消えるため
+- 区分は in（キャッシュなし入力）・cw（キャッシュ書き込み）・cr（キャッシュ読み出し）・out（出力、思考を含む）・think（そのうち思考）。ドル換算はしない
+
+```sh
+python3 scripts/token_report.py               # ラウンド×発生源の表
+python3 scripts/token_report.py --jobs R0012  # worker ごと
+python3 scripts/token_report.py --save        # usage.json の無い閉じたラウンドに書き出す
+```
+
+R0001〜R0011 の集計結果は [docs/レポート/トークン計測レポート.html](docs/レポート/トークン計測レポート.html) にある。
 
 ## 進め方
 

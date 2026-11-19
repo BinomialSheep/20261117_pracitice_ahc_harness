@@ -8,6 +8,7 @@ import concurrent.futures, contextlib, fcntl, hashlib,json,os,re,shutil,sys, tim
 from pathlib import Path
 from .config import load as load_config
 from .process import execute
+from . import usage
 from .util import ThinError,read_json,write_json,now,digest,safe_id,relpath,format_argv
 
 IGNORE={'target','.git','__pycache__','node_modules','.venv','.cache'}
@@ -196,7 +197,25 @@ def submit(root,rid,jid):
             raise ThinError('Submission state already terminal: '+job['status'])
         return _freeze_candidate(jdir,job)
 
-def _worker(root,rid,jid,command,minutes):
+def _engine_settings(argv):
+    """Model and effort pinned in the engine argv (claude: --model/--effort, codex: -m/-c model_reasoning_effort=)."""
+    out={}
+    for a,b in zip(argv,argv[1:]):
+        if a in ('--model','-m'):out['model']=b
+        elif a=='--effort':out['effort']=b
+        elif a=='-c' and b.startswith('model_reasoning_effort='):out['effort']=b.split('=',1)[1].strip('"\'')
+    return out
+
+def _record_usage(jdir,job):
+    """Measurement must never fail a worker: errors are recorded, not raised."""
+    try:
+        usage.collect_codex_rollout(jdir)
+        job['usage']=usage.worker_summary(jdir)
+        msg=usage.last_message(jdir)
+        if msg is not None:(jdir/'agent.last_message.md').write_text(msg,encoding='utf-8')
+    except Exception as e:job['usage_error']=f'{type(e).__name__}: {e}'[:300]
+
+def _worker(root,rid,jid,command,minutes,engine=None):
     jdir=Path(root)/'runs'/rid/'jobs'/jid;w=jdir/'workspace'
     with (jdir/'launch.lock').open('a') as lockfile:
         try:fcntl.flock(lockfile,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -208,7 +227,8 @@ def _worker(root,rid,jid,command,minutes):
                 return {'id':jid,'status':job['status'],'reused':True}
             if job['status'] not in ('pending','worker_failed','running'):
                 return {'id':jid,'status':job['status']}
-            job.update(status='running',worker_started_at=now());write_json(jdir/'job.json',job)
+            job.update(status='running',worker_started_at=now(),engine=engine,**_engine_settings(command))
+            write_json(jdir/'job.json',job)
             env=os.environ.copy()
             # Retain user's CLI authentication, but clamp common library oversubscription.
             for name in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','RAYON_NUM_THREADS','CARGO_BUILD_JOBS'):
@@ -218,6 +238,7 @@ def _worker(root,rid,jid,command,minutes):
             result=execute(argv,w,minutes*60,stdin=(w/'task.md').read_text(),
                            stdout_file=jdir/'agent.stdout',stderr_file=jdir/'agent.stderr',env=env)
             job['agent_run']=result
+            _record_usage(jdir,job)
             frozen=_freeze_candidate(jdir,job)
             if frozen['status']=='submitted':frozen['agent_outcome']=result['status']
             else:
@@ -235,7 +256,7 @@ def run_workers(root,rid,engine):
     workers=cfg['workers'];parallel=workers['parallelism_A'] if plan['mode']=='A' else 1
     command=workers['engines'][engine]
     with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
-        jobs={pool.submit(_worker,root,rid,x['id'],command,workers[f'minutes_{plan["mode"]}']):x for x in plan['ideas']}
+        jobs={pool.submit(_worker,root,rid,x['id'],command,workers[f'minutes_{plan["mode"]}'],engine):x for x in plan['ideas']}
         results=[]
         for task in concurrent.futures.as_completed(jobs):results.append(task.result())
     result=sorted(results,key=lambda x:x['id'])
@@ -274,6 +295,8 @@ def close(root,rid):
         elif state['phase']!='evaluated':
             raise ThinError('Evaluate or finish a fully failed round before closing')
         state.update(phase='closed',closed_at=now());write_json(rd/'state.json',state)
+    try:write_json(rd/'usage.json',usage.round_snapshot(root,rd.name))  # transcripts in ~/.claude expire
+    except Exception as e:write_json(rd/'usage.json',{'error':f'{type(e).__name__}: {e}'[:300]})
     return state
 
 def status(root):

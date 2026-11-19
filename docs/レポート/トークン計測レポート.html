@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>トークン計測レポート</title>
+<style>
+:root {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --surface-2: #f3f1ec;
+  --text: #1f2328;
+  --muted: #5d636b;
+  --border: #dcd8cf;
+  --accent: #2f5fa7;
+  --accent-soft: #e5ecf7;
+  --good: #1f7a4d;
+  --good-soft: #e3f2ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbefdc;
+  --bad: #b03a2e;
+  --bad-soft: #f8e4e1;
+  --p1: #2f5fa7;
+  --p2: #7a5ab8;
+  --p3: #1f7a4d;
+  --p4: #b5762a;
+  --p5: #8a8f96;
+  --code-bg: #f1efe9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a;
+    --surface: #1d2024;
+    --surface-2: #24282d;
+    --text: #e6e8eb;
+    --muted: #a0a7b0;
+    --border: #363b42;
+    --accent: #7fa8e8;
+    --accent-soft: #23324a;
+    --good: #6cc495;
+    --good-soft: #1c3528;
+    --warn: #e0a85a;
+    --warn-soft: #3a2d18;
+    --bad: #ec8a7e;
+    --bad-soft: #3d2220;
+    --p1: #6f9be0;
+    --p2: #a68ae0;
+    --p3: #5fb98a;
+    --p4: #d49a52;
+    --p5: #7d838b;
+    --code-bg: #262a30;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171a;
+  --surface: #1d2024;
+  --surface-2: #24282d;
+  --text: #e6e8eb;
+  --muted: #a0a7b0;
+  --border: #363b42;
+  --accent: #7fa8e8;
+  --accent-soft: #23324a;
+  --good: #6cc495;
+  --good-soft: #1c3528;
+  --warn: #e0a85a;
+  --warn-soft: #3a2d18;
+  --bad: #ec8a7e;
+  --bad-soft: #3d2220;
+  --p1: #6f9be0;
+  --p2: #a68ae0;
+  --p3: #5fb98a;
+  --p4: #d49a52;
+  --p5: #7d838b;
+  --code-bg: #262a30;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+main { max-width: 940px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 1.7rem; line-height: 1.35; margin: 0 0 6px; letter-spacing: .01em; }
+h2 {
+  font-size: 1.3rem; margin: 56px 0 14px; padding-bottom: 6px;
+  border-bottom: 2px solid var(--border);
+}
+h3 { font-size: 1.07rem; margin: 30px 0 8px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+code, pre, .mono { font-family: "SFMono-Regular", "Consolas", "Menlo", "Noto Sans Mono", monospace; font-size: .88em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre {
+  background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto;
+  line-height: 1.55; margin: 12px 0;
+}
+pre code { background: none; padding: 0; }
+ul, ol { padding-left: 1.4em; margin: 8px 0; }
+li { margin: 3px 0; }
+.lede { color: var(--muted); margin: 0 0 18px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: .88rem; }
+.toc {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 18px; margin: 22px 0 0;
+}
+.toc ol { margin: 4px 0; columns: 2; column-gap: 28px; }
+.toc li { break-inside: avoid; }
+@media (max-width: 640px) { .toc ol { columns: 1; } }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 22px 0 0; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.kpi .label { font-size: .8rem; color: var(--muted); }
+.kpi .value { font-size: 1.45rem; font-weight: 650; line-height: 1.3; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: .8rem; color: var(--muted); }
+
+.note {
+  border-left: 4px solid var(--accent); background: var(--accent-soft);
+  padding: 9px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+.note.warn { border-color: var(--warn); background: var(--warn-soft); }
+
+.table-wrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.nowrap { white-space: nowrap; }
+
+.chip {
+  display: inline-block; font-size: .78rem; padding: 0 8px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface-2); white-space: nowrap; line-height: 1.7;
+}
+.chip.a { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.chip.good { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.chip.bad { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+.chip.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+
+.phases { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+.phase { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; }
+.phase i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+.state .arrow { color: var(--muted); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.two > div { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.two h4 { margin: 0 0 4px; font-size: .98rem; }
+@media (max-width: 640px) { .two { grid-template-columns: 1fr; } }
+
+.formula { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin: 12px 0; }
+.formula pre { margin: 6px 0; background: var(--code-bg); }
+
+.tree { font-size: .86rem; }
+footer { margin-top: 60px; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--border); padding-top: 12px; }
+
+:root { --grid: #e6e2da; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --grid: #2c3137; } }
+:root[data-theme="dark"] { --grid: #2c3137; }
+.chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 8px; margin: 14px 0; }
+.chart figcaption { font-weight: 600; margin-bottom: 2px; }
+.chart .cap-sub { color: var(--muted); font-size: .84rem; margin-bottom: 8px; }
+.hbar { display: grid; grid-template-columns: 4.6em 1fr 4.4em; align-items: center; column-gap: 8px; font-size: .84rem; padding: 2px 0; border-radius: 4px; }
+.hbar:hover { background: var(--surface-2); }
+.hbar .k { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hbar .track { position: relative; height: 14px;
+  background: linear-gradient(to right, var(--grid) 1px, transparent 1px) 0 0 / 33.3333% 100%; }
+.hbar .bar { display: block; height: 100%; background: var(--p1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.hbar .v { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.axis { display: grid; grid-template-columns: 4.6em 1fr 4.4em; column-gap: 8px; font-size: .74rem; color: var(--muted); }
+.axis .ticks { position: relative; height: 18px; }
+.axis .ticks span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.axis .ticks span:first-child { transform: none; }
+.axis .ticks span:last-child { transform: translateX(-100%); }
+ol.plain > li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>トークン計測レポート</h1>
+  <p class="lede">R0001〜R0011 の記録から、どこでどれだけトークンを使ったかを集計した。サブスクで動かしているので、ドル換算はしない。</p>
+  <div class="meta">
+    <span>集計日：2026-11-19</span>
+    <span>対象：2026-11-17〜18 の R0001〜R0011（すべて close 済み）</span>
+    <span>集計：<code>scripts/token_report.py</code></span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">オーケストレーターが1回に読む文脈</div>
+      <div class="value">22万 → 53万</div>
+      <div class="sub">R0001 と R0011 の平均。1つのセッションで続けたため増え続けた</div>
+    </div>
+    <div class="kpi">
+      <div class="label">オーケストレーターのキャッシュ読み出し</div>
+      <div class="value">6,585万</div>
+      <div class="sub">191回の呼び出しの合計（準備を含む）</div>
+    </div>
+    <div class="kpi">
+      <div class="label">トークンの記録が残っていた worker</div>
+      <div class="value">24 / 73 体</div>
+      <div class="sub">claude の worker は全員、記録が無かった</div>
+    </div>
+    <div class="kpi">
+      <div class="label">完走した codex worker 1体（A）</div>
+      <div class="value">117万</div>
+      <div class="sub">キャッシュ読み出しの平均（23体）。出力は 1.6万</div>
+    </div>
+  </div>
+
+  <nav class="toc" aria-label="目次">
+    <ol>
+      <li><a href="#summary">要点</a></li>
+      <li><a href="#metric">指標と区分</a></li>
+      <li><a href="#coverage">記録の有無</a></li>
+      <li><a href="#orch">オーケストレーター</a></li>
+      <li><a href="#workers">worker</a></li>
+      <li><a href="#sessions">その他の対話セッション</a></li>
+      <li><a href="#limits">利用上限の観測値</a></li>
+      <li><a href="#caveats">集計の限界</a></li>
+      <li><a href="#changes">今回入れた記録の仕組み</a></li>
+      <li><a href="#next">次の節約候補</a></li>
+    </ol>
+  </nav>
+</header>
+
+<h2 id="summary">1. 要点</h2>
+<ul>
+  <li><b>いちばん大きいのは、オーケストレーターの文脈の積み上がり。</b>準備から R0011 までを1つのセッションで進めたため、1回の呼び出しで読む文脈が R0001 の22万から R0011 の53万へ、ほぼ単調に増えた。同じ作業でも、1回あたりの読み出しは約2.4倍になっている。</li>
+  <li><b>長く待つと、キャッシュの書き直しが起きる。</b>キャッシュの有効期限は1時間。worker の実行や評価で2時間51分・8時間15分待ったあとの呼び出しで、文脈全体（26万・37万）を書き直していた。オーケストレーターのキャッシュ書き込み（110万）の57%がこの2回。</li>
+  <li><b>worker の記録は大半が欠けていた。</b>claude の worker は最終メッセージしか残しておらず、codex の worker は20分の上限で止められると何も残らなかった。今回のハーネス変更で、どちらも呼び出しごとに残るようにした（<a href="#changes">9章</a>）。</li>
+  <li><b>完走した codex worker は、1体あたりキャッシュ読み出し約117万・出力約1.6万。</b>A の1ラウンド（10体）で、キャッシュ読み出しは1,000万を超える（R0011 で1,278万）。</li>
+  <li><b>Claude と Codex は別々の利用枠で、トークンの重みも違う。</b>両者のトークン数を足したり比べたりはしない。</li>
+</ul>
+
+<h2 id="metric">2. 指標と区分</h2>
+<p>サブスクで実際に制約になるのは、5時間枠と週間枠の使用率。そこで、<b>主指標はラウンドごとの使用率の増分</b>とする。ただしこれまでのログにはほとんど残っていないので（<a href="#limits">7章</a>）、この報告ではトークン数を区分別に見る。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>区分</th><th>意味</th><th>重みの目安</th></tr></thead>
+<tbody>
+<tr><td class="nowrap">キャッシュなし入力</td><td>キャッシュに無い入力。Claude Code ではほぼ0になる</td><td>基準</td></tr>
+<tr><td class="nowrap">キャッシュ書き込み</td><td>文脈の新しい部分を、キャッシュに載せた分</td><td>入力より重い</td></tr>
+<tr><td class="nowrap">キャッシュ読み出し</td><td>前の呼び出しと同じ部分を、もう一度読んだ分。毎回、文脈全体を読み直す</td><td>入力の約1/10</td></tr>
+<tr><td class="nowrap">出力</td><td>モデルが書いた分。思考を含む</td><td>入力の数倍</td></tr>
+</tbody></table></div>
+<p>件数ではキャッシュ読み出しが大半を占めるが、重みは小さい。全部を足した1つの数字で判断すると誤るので、区分を分けて見る。</p>
+<p>対話セッションの呼び出しは、時刻でラウンドに割り当てた。R(n) の区間は「R(n-1) を close してから R(n) を close するまで」。次のラウンドの案を考える時間も、そのラウンドに入る。</p>
+
+<h2 id="coverage">3. 記録の有無</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>発生源</th><th>記録の場所</th><th>変更前</th><th>変更後（R0012 から）</th></tr></thead>
+<tbody>
+<tr><td>オーケストレーター（Claude Code）</td><td><code>~/.claude/projects/&lt;リポジトリ&gt;/*.jsonl</code></td><td><span class="chip good">残る</span> 1つの応答が複数行に分かれるので、重複を除いて数える</td><td>同じ。close のときに <code>usage.json</code> へ写す</td></tr>
+<tr><td>Claude Code のサブエージェント</td><td><code>&lt;セッション&gt;/subagents/*.jsonl</code></td><td><span class="chip good">残る</span></td><td>同じ</td></tr>
+<tr><td>claude の worker</td><td><code>agent.stdout</code></td><td><span class="chip bad">残らない</span> 最終メッセージの文章だけ</td><td>呼び出しごとのトークンと使用率</td></tr>
+<tr><td>codex の worker</td><td><code>agent.stdout</code>（<code>--json</code>）</td><td><span class="chip warn">一部</span> 完走した worker の合計だけ</td><td>止められた worker も、呼び出しごとのトークンと使用率</td></tr>
+<tr><td>Codex の対話セッション</td><td><code>~/.codex/sessions/**/rollout-*.jsonl</code></td><td><span class="chip good">残る</span></td><td>同じ</td></tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead><tr><th>ラウンド</th><th>種類</th><th>worker</th><th class="num">体数</th><th class="num">記録あり</th><th>備考</th></tr></thead>
+<tbody><tr><td class="nowrap">R0001</td><td>B</td><td>claude</td><td class="num">1</td><td class="num">0</td><td></td></tr><tr><td class="nowrap">R0002</td><td>A</td><td>claude</td><td class="num">10</td><td class="num">0</td><td>7体が5時間枠の上限に達して途中で停止</td></tr><tr><td class="nowrap">R0003</td><td>A</td><td>claude</td><td class="num">10</td><td class="num">0</td><td></td></tr><tr><td class="nowrap">R0004</td><td>B</td><td>claude</td><td class="num">1</td><td class="num">0</td><td></td></tr><tr><td class="nowrap">R0005</td><td>A</td><td>claude</td><td class="num">10</td><td class="num">0</td><td></td></tr><tr><td class="nowrap">R0006</td><td>B</td><td>codex</td><td class="num">1</td><td class="num">1</td><td></td></tr><tr><td class="nowrap">R0007</td><td>A</td><td>claude</td><td class="num">10</td><td class="num">0</td><td></td></tr><tr><td class="nowrap">R0008</td><td>A</td><td>codex</td><td class="num">10</td><td class="num">7</td><td>3体が20分の上限で止められ、記録が残らなかった</td></tr><tr><td class="nowrap">R0009</td><td>A</td><td>codex</td><td class="num">10</td><td class="num">6</td><td>4体が20分の上限で止められ、記録が残らなかった</td></tr><tr><td class="nowrap">R0010</td><td>B</td><td>手作業</td><td class="num">1</td><td class="num">-</td><td>手作業（worker を起動していない）</td></tr><tr><td class="nowrap">R0011</td><td>A</td><td>codex</td><td class="num">10</td><td class="num">10</td><td></td></tr></tbody></table></div>
+
+<h2 id="orch">4. オーケストレーター</h2>
+<p>オーケストレーターは、1つの Claude Code セッション（<code>1978bc68</code>、Opus 5.5）で、準備から R0011 まで続けた（R0006 だけは別のセッション）。文脈は一度も小さくならず（圧縮なし）、ラウンドごとに数万ずつ増えた。</p>
+<figure class="chart" role="img" aria-label="オーケストレーターが1回の呼び出しで読んだ文脈（ラウンド内の平均）"><figcaption>オーケストレーターが1回の呼び出しで読んだ文脈（ラウンド内の平均）</figcaption><div class="cap-sub">1つのセッションで続けたため、ラウンドを重ねるごとに増えた。行にカーソルを置くと値が出る。数値は下の表にもある。</div><div class="hbar" title="R0001（B）：22万"><span class="k">R0001 B</span><span class="track"><span class="bar" style="width:37.0%"></span></span><span class="v">22万</span></div><div class="hbar" title="R0002（A）：30万"><span class="k">R0002 A</span><span class="track"><span class="bar" style="width:50.1%"></span></span><span class="v"></span></div><div class="hbar" title="R0003（A）：35万"><span class="k">R0003 A</span><span class="track"><span class="bar" style="width:58.4%"></span></span><span class="v"></span></div><div class="hbar" title="R0004（B）：37万"><span class="k">R0004 B</span><span class="track"><span class="bar" style="width:61.5%"></span></span><span class="v"></span></div><div class="hbar" title="R0005（A）：39万"><span class="k">R0005 A</span><span class="track"><span class="bar" style="width:64.2%"></span></span><span class="v"></span></div><div class="hbar" title="R0006（B）：39万"><span class="k">R0006 B</span><span class="track"><span class="bar" style="width:65.2%"></span></span><span class="v"></span></div><div class="hbar" title="R0007（A）：41万"><span class="k">R0007 A</span><span class="track"><span class="bar" style="width:68.7%"></span></span><span class="v"></span></div><div class="hbar" title="R0008（A）：45万"><span class="k">R0008 A</span><span class="track"><span class="bar" style="width:74.6%"></span></span><span class="v"></span></div><div class="hbar" title="R0009（A）：49万"><span class="k">R0009 A</span><span class="track"><span class="bar" style="width:81.5%"></span></span><span class="v"></span></div><div class="hbar" title="R0010（B）：52万"><span class="k">R0010 B</span><span class="track"><span class="bar" style="width:87.0%"></span></span><span class="v"></span></div><div class="hbar" title="R0011（A）：53万"><span class="k">R0011 A</span><span class="track"><span class="bar" style="width:89.1%"></span></span><span class="v">53万</span></div><div class="axis"><span></span><div class="ticks"><span style="left:0.0000%">0</span><span style="left:33.3333%">20万</span><span style="left:66.6667%">40万</span><span style="left:100.0000%">60万</span></div><span></span></div></figure>
+<figure class="chart" role="img" aria-label="オーケストレーターのキャッシュ読み出し（ラウンドごとの合計）"><figcaption>オーケストレーターのキャッシュ読み出し（ラウンドごとの合計）</figcaption><div class="cap-sub">呼び出し回数 × 文脈の大きさで決まる。R0006 は別のセッションで作業していたので1回だけ。</div><div class="hbar" title="R0001（B）：396万"><span class="k">R0001 B</span><span class="track"><span class="bar" style="width:33.0%"></span></span><span class="v"></span></div><div class="hbar" title="R0002（A）：897万"><span class="k">R0002 A</span><span class="track"><span class="bar" style="width:74.8%"></span></span><span class="v"></span></div><div class="hbar" title="R0003（A）：524万"><span class="k">R0003 A</span><span class="track"><span class="bar" style="width:43.7%"></span></span><span class="v"></span></div><div class="hbar" title="R0004（B）：294万"><span class="k">R0004 B</span><span class="track"><span class="bar" style="width:24.5%"></span></span><span class="v"></span></div><div class="hbar" title="R0005（A）：345万"><span class="k">R0005 A</span><span class="track"><span class="bar" style="width:28.8%"></span></span><span class="v"></span></div><div class="hbar" title="R0006（B）：39万"><span class="k">R0006 B</span><span class="track"><span class="bar" style="width:3.2%"></span></span><span class="v"></span></div><div class="hbar" title="R0007（A）：703万"><span class="k">R0007 A</span><span class="track"><span class="bar" style="width:58.6%"></span></span><span class="v"></span></div><div class="hbar" title="R0008（A）：891万"><span class="k">R0008 A</span><span class="track"><span class="bar" style="width:74.3%"></span></span><span class="v"></span></div><div class="hbar" title="R0009（A）：1,071万"><span class="k">R0009 A</span><span class="track"><span class="bar" style="width:89.3%"></span></span><span class="v">1,071万</span></div><div class="hbar" title="R0010（B）：521万"><span class="k">R0010 B</span><span class="track"><span class="bar" style="width:43.4%"></span></span><span class="v"></span></div><div class="hbar" title="R0011（A）：480万"><span class="k">R0011 A</span><span class="track"><span class="bar" style="width:40.0%"></span></span><span class="v">480万</span></div><div class="axis"><span></span><div class="ticks"><span style="left:0.0000%">0</span><span style="left:33.3333%">400万</span><span style="left:66.6667%">800万</span><span style="left:100.0000%">1,200万</span></div><span></span></div></figure>
+<div class="table-wrap"><table>
+<thead><tr><th>区間</th><th class="num">呼び出し</th><th class="num">平均の文脈</th><th class="num">最大の文脈</th><th class="num">キャッシュ読み出し</th><th class="num">キャッシュ書き込み</th><th class="num">出力（うち思考）</th><th>effort（回数）</th></tr></thead>
+<tbody><tr><td class="nowrap">準備</td><td class="num">29</td><td class="num">13万</td><td class="num">20万</td><td class="num">369万</td><td class="num">17万</td><td class="num">9.5万（7.7万）</td><td class="nowrap">max 29</td></tr><tr><td class="nowrap">R0001</td><td class="num">18</td><td class="num">22万</td><td class="num">24万</td><td class="num">396万</td><td class="num">3.5万</td><td class="num">2.5万（1.6万）</td><td class="nowrap">max 15・xhigh 3</td></tr><tr><td class="nowrap">R0002</td><td class="num">31</td><td class="num">30万</td><td class="num">34万</td><td class="num">897万</td><td class="num">35万</td><td class="num">8.2万（5.6万）</td><td class="nowrap">xhigh 16・max 15</td></tr><tr><td class="nowrap">R0003</td><td class="num">15</td><td class="num">35万</td><td class="num">36万</td><td class="num">524万</td><td class="num">1.7万</td><td class="num">1.8万（8,643）</td><td class="nowrap">xhigh 15</td></tr><tr><td class="nowrap">R0004</td><td class="num">8</td><td class="num">37万</td><td class="num">37万</td><td class="num">294万</td><td class="num">1.1万</td><td class="num">1.0万（4,027）</td><td class="nowrap">xhigh 8</td></tr><tr><td class="nowrap">R0005</td><td class="num">9</td><td class="num">39万</td><td class="num">39万</td><td class="num">345万</td><td class="num">1.4万</td><td class="num">1.3万（6,005）</td><td class="nowrap">xhigh 9</td></tr><tr><td class="nowrap">R0006</td><td class="num">1</td><td class="num">39万</td><td class="num">39万</td><td class="num">39万</td><td class="num">1,010</td><td class="num">1,115（314）</td><td class="nowrap">xhigh 1</td></tr><tr><td class="nowrap">R0007</td><td class="num">18</td><td class="num">41万</td><td class="num">42万</td><td class="num">703万</td><td class="num">40万</td><td class="num">1.9万（9,054）</td><td class="nowrap">xhigh 18</td></tr><tr><td class="nowrap">R0008</td><td class="num">20</td><td class="num">45万</td><td class="num">46万</td><td class="num">891万</td><td class="num">3.2万</td><td class="num">2.8万（1.3万）</td><td class="nowrap">xhigh 20</td></tr><tr><td class="nowrap">R0009</td><td class="num">22</td><td class="num">49万</td><td class="num">51万</td><td class="num">1,071万</td><td class="num">4.5万</td><td class="num">2.7万（1.2万）</td><td class="nowrap">xhigh 22</td></tr><tr><td class="nowrap">R0010</td><td class="num">10</td><td class="num">52万</td><td class="num">53万</td><td class="num">521万</td><td class="num">1.2万</td><td class="num">1.2万（8,166）</td><td class="nowrap">xhigh 10</td></tr><tr><td class="nowrap">R0011</td><td class="num">9</td><td class="num">53万</td><td class="num">54万</td><td class="num">480万</td><td class="num">7,765</td><td class="num">7,109（1,352）</td><td class="nowrap">xhigh 9</td></tr>
+<tr><td><b>合計</b></td><td class="num"><b>191</b></td><td></td><td class="num">54万</td><td class="num"><b>6,585万</b></td><td class="num">110万</td><td class="num">34万（21万）</td><td></td></tr>
+</tbody></table></div>
+<ul>
+  <li>キャッシュ読み出しは「呼び出し回数 × 文脈の大きさ」で決まる。たとえば R0009 は 22回 × 平均49万で1,071万。</li>
+  <li>新しいセッションの最初の呼び出しは、約3.9万（AGENTS.md・道具の定義・メモリの索引など）。R0011 の時点では、その約14倍を毎回読んでいた。</li>
+  <li>R0002 と R0007 のキャッシュ書き込みは、長い待ちのあとの書き直し（1章）。</li>
+  <li>出力の62%が思考。effort は、準備〜R0002 で max と xhigh が混ざり、R0003 以降は xhigh（個人の設定の値）。</li>
+</ul>
+
+<h2 id="workers">5. worker</h2>
+<p>記録が残っていたのは codex の worker だけ。下の表は、記録のあった worker の合計。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>ラウンド</th><th>種類</th><th class="num">記録あり / 体数</th><th class="num">キャッシュなし入力</th><th class="num">キャッシュ読み出し</th><th class="num">出力（うち思考）</th></tr></thead>
+<tbody><tr><td class="nowrap">R0006</td><td>B</td><td class="num">1 / 1</td><td class="num">15万</td><td class="num">674万</td><td class="num">10万（5.8万）</td></tr><tr><td class="nowrap">R0008</td><td>A</td><td class="num">7 / 10</td><td class="num">44万</td><td class="num">856万</td><td class="num">13万（7.1万）</td></tr><tr><td class="nowrap">R0009</td><td>A</td><td class="num">6 / 10</td><td class="num">42万</td><td class="num">565万</td><td class="num">6.4万（3.4万）</td></tr><tr><td class="nowrap">R0011</td><td>A</td><td class="num">10 / 10</td><td class="num">83万</td><td class="num">1,278万</td><td class="num">18万（9.7万）</td></tr></tbody></table></div>
+<ul>
+  <li>A で完走した codex worker 23体の1体あたり：キャッシュ読み出しは平均117万（54万〜254万）、出力は平均1.6万（8,394〜3.5万）、キャッシュなし入力は平均7.3万。</li>
+  <li>B の1体（R0006、59分）は、キャッシュ読み出しが674万。R0011 の A（10体）の半分を超える。</li>
+  <li>20分の上限で止められた7体（R0008・R0009）は記録が無い。上限まで動いていたので、完走した worker より少ないとは限らない。</li>
+  <li>claude の worker（R0001〜R0005、R0007）は、実行時間しか分からない。R0003・R0005・R0007 の A では、10体の実行時間の合計が 29〜43分（1体あたり平均3〜4分、最長8分）だった。R0002 は7体が上限で止まったので除く。</li>
+</ul>
+
+<h2 id="sessions">6. その他の対話セッション</h2>
+<p>ラウンドの外の作業も、同じリポジトリのセッションとして記録に残る。時刻でラウンドに割り当てるので、<code>token_report.py</code> の表では発生源（セッションID）の列で分けて表示する。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>セッション</th><th>内容</th><th class="num">呼び出し</th><th class="num">キャッシュ読み出し</th><th class="num">キャッシュ書き込み</th><th class="num">出力</th><th class="num">最大の文脈</th></tr></thead>
+<tbody><tr><td class="nowrap"><code>claude:7e9f68ab</code></td><td>ハーネスの展開と整備（11/17）</td><td class="num">57</td><td class="num">1,110万</td><td class="num">27万</td><td class="num">18万</td><td class="num">29万</td></tr><tr><td class="nowrap"><code>claude:1fe9faca</code></td><td>Codex の呼び出し環境の確認</td><td class="num">66</td><td class="num">778万</td><td class="num">15万</td><td class="num">7.0万</td><td class="num">18万</td></tr><tr><td class="nowrap"><code>claude:5f3555aa</code></td><td>ハーネスと解法のスナップショット作成</td><td class="num">27</td><td class="num">296万</td><td class="num">14万</td><td class="num">4.2万</td><td class="num">17万</td></tr><tr><td class="nowrap"><code>claude:91ae2b24</code></td><td>トークン計測（このレポートの作業。集計時点まで）</td><td class="num">43</td><td class="num">527万</td><td class="num">30万</td><td class="num">8.9万</td><td class="num">21万</td></tr><tr><td class="nowrap"><code>claude:91ae2b24/sub</code></td><td>上のセッションのサブエージェント（Webページの取得1回）</td><td class="num">2</td><td class="num">4,252</td><td class="num">7.1万</td><td class="num">5,953</td><td class="num">7.1万</td></tr>
+<tr><td class="nowrap"><code>codex:*</code></td><td>Codex の対話と、engine 確認の試行（6件）</td><td class="num">7</td><td class="num" colspan="4">入力の合計 11万</td></tr>
+</tbody></table></div>
+
+<h2 id="limits">7. 利用上限の観測値</h2>
+<p>使用率は、これまで散発的にしか記録していない。次のラウンドからは、worker の呼び出しごとに残る。</p>
+<div class="table-wrap"><table>
+<thead><tr><th>時点</th><th>観測</th><th>出どころ</th></tr></thead>
+<tbody>
+<tr><td class="nowrap">R0002</td><td>Claude の A（10体）を始めて約5分で、7体が5時間枠の上限に達して停止</td><td>worker の出力</td></tr>
+<tr><td class="nowrap">R0006</td><td>Codex の B（1体、59分）で、5時間枠 +19ポイント、週間枠 +3ポイント</td><td><code>codex_limits.py</code> の前後差</td></tr>
+<tr><td class="nowrap">11/18 19:10</td><td>Claude：5時間枠 73%、週間枠 35%</td><td><code>claude -p</code> の試行（stream-json）</td></tr>
+<tr><td class="nowrap">11/19 15:47</td><td>Claude：5時間枠 7%、週間枠 38%。Codex：5時間枠 0%、週間枠 25%</td><td>ハーネス変更後の確認の試行</td></tr>
+</tbody></table></div>
+
+<h2 id="caveats">8. 集計の限界</h2>
+<ul>
+  <li>Claude Code の記録は、1つの応答を content block ごとに別の行に書き、同じ usage を繰り返す。<code>message.id</code> で重複を除いた。ある1セッションでは、重複を除いた合計が Claude Code 自身の集計（<code>cost-state</code>）より約7%少なかった。原因は分かっていないので、数値は概数として扱う。</li>
+  <li>Codex の <code>input_tokens</code> はキャッシュ分を含む。キャッシュ分を引いて、Claude と同じ区分に揃えた。</li>
+  <li>codex の worker の旧形式（<code>turn.completed</code>）は合計しか無く、呼び出し回数と文脈の大きさは分からない。</li>
+  <li>対話セッションは時刻でラウンドに割り当てる。同じ時間帯の別の作業（6章）も、そのラウンドの区間に入る。</li>
+  <li><code>~/.claude</code> の記録は、既定の設定では30日で消える。今後は close のときに <code>runs/R####/usage.json</code> へ写し、R0001〜R0011 の分も書き出した。</li>
+</ul>
+
+<h2 id="changes">9. 今回入れた記録の仕組み</h2>
+<ol class="plain">
+  <li><b>claude の worker</b>：<code>--output-format stream-json --verbose</code> を付けた。<code>agent.stdout</code> は、呼び出しごとの usage と利用上限の使用率を含む JSONL になる。最終メッセージは <code>agent.last_message.md</code> に書き出す。</li>
+  <li><b>codex の worker</b>：<code>--ephemeral</code> を外し、念のため <code>--disable memories</code> を付けた。worker が終わると、<code>run-workers</code> がその worker のセッション記録を <code>~/.codex/sessions</code> から <code>jobs/&lt;id&gt;/codex_rollout.jsonl</code> へ移す。止められた worker も、そこまでの呼び出しごとのトークンと使用率が残る。</li>
+  <li><b>job.json</b>：engine・モデル・effort と、トークンの要約（<code>usage</code>：呼び出し回数、各区分、最大の文脈、使用率の始めと終わり）を書く。</li>
+  <li><b>close</b>：ラウンドの消費（対話セッション、worker、使用率）を <code>runs/R####/usage.json</code> に書く。</li>
+  <li><b>集計</b>：<code>python3 scripts/token_report.py</code>（表）、<code>--jobs R0012</code>（worker ごと）、<code>--json</code>、<code>--save</code>（過去分の書き出し）。</li>
+</ol>
+<div class="note warn"><b>codex の痕跡について：</b><code>--ephemeral</code> を外すと、記録ファイルを移しても、Codex 自身の SQLite（<code>~/.codex/state_5.sqlite</code> のスレッド一覧と <code>thread_history_1.sqlite</code>）に、スレッドのタイトル（task.md の冒頭約80字）と中身が残る。<code>--ephemeral</code> のときは何も残らなかった。worker のサンドボックスは読み取りを制限しないので、後の worker は読もうと思えば読める。ただし <code>runs/</code> も同じく読めるので、漏れうる中身の範囲は変わらない。監査（<code>codex_audit.py</code>）は、workspace の外のパスへの参照を注意として出す。</div>
+<p>どちらの engine も、Haiku と effort low の短い試行で、<code>run-workers</code> と同じ処理を通して確かめた。</p>
+
+<h2 id="next">10. 次の節約候補</h2>
+<p>効果は、次のラウンドからの記録で確かめる。見る数値も書いておく。</p>
+<ol class="plain">
+  <li><b>オーケストレーターをラウンドごとに新しいセッションで始める。</b>状態はファイルにあり、AGENTS.md の手順1で再開できる。1回あたりの文脈が約50万から数万に下がる見込み。見る数値：平均の文脈、キャッシュ読み出し、使用率の増分。</li>
+  <li><b>長い待ちのあとは、新しいセッションで続ける。</b>1時間を超えて待つと、どのみち文脈全体を書き直すことになる。1と合わせると効果が大きい。見る数値：キャッシュ書き込み。</li>
+  <li><b>オーケストレーターの effort を見直す。</b>出力の約6割が思考。案の作成と採否の判断に必要な水準を、結果を見ながら決める。見る数値：出力・思考と、採用率。</li>
+  <li><b>claude の worker の固定分を減らす。</b><code>--safe-mode</code> でも、道具の定義などで1回あたり約3万を読む（Haiku の試行）。道具を絞るフラグ（<code>--tools</code>）で減らせるか確かめる。見る数値：worker の最初の呼び出しの文脈。</li>
+  <li><b>A の並列数と時間の上限を、記録から決め直す。</b>止められた worker の消費が分かるようになったので、20分の上限に達した worker が成果に見合っているかを確かめる。</li>
+</ol>
+
+<footer>
+  集計スクリプト：<code>scripts/token_report.py</code>（集計の中身は <code>thin/usage.py</code>）。数値は 2026-11-19 時点のログによる。
+</footer>
+</main>
+</body>
+</html>
