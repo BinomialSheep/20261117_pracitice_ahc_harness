@@ -32,6 +32,8 @@ class ThinHarness(unittest.TestCase):
         self.assertNotIn('1214.8',(w/'task.md').read_text())
         self.assertTrue((w/'.git').is_dir())
         self.assertIn('task.md',(w/'AGENTS.md').read_text())  # keeps codex from walking up for AGENTS.md
+        self.assertIn('yield_time_ms',(w/'task.md').read_text())  # codex polled ~10 s commands every second (R0012)
+        self.assertIn('deadline_epoch',read_json(w/'worker_config.json'))  # written by run-workers at launch
     def test_single_evaluation_reused_for_identical_codes(self):
         rd=self.root/'runs/R0001/evaluation'
         self.assertTrue((rd/'A01/scores.csv').exists())

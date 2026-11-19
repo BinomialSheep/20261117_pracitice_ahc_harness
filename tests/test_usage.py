@@ -48,13 +48,17 @@ class Usage(unittest.TestCase):
         j=self.d/'job';tid='01a1ede9-7b19-72f0-8eb6-dadfbc475056'
         jsonl(j/'agent.stdout',[{'type':'thread.started','thread_id':tid},{'type':'item.completed','item':{'type':'agent_message','text':'hi'}}])
         src=self.d/'codex/sessions/2026/11/19'/f'rollout-2026-11-19T00-00-00-{tid}.jsonl'
+        tool=lambda js:{'type':'response_item','payload':{'type':'custom_tool_call','name':'exec','input':js}}
         jsonl(src,[{'type':'session_meta','payload':{'cwd':'/w'}},token_count('2026-11-19T00:00:01Z',100,60,5,10),
-                   token_count('2026-11-19T00:00:02Z',100,60,5,10),token_count('2026-11-19T00:00:03Z',250,180,12,11)])
+                   tool('text(await tools.exec_command({cmd:"python3 quickcheck.py --seed 0",yield_time_ms:1000}))'),
+                   token_count('2026-11-19T00:00:02Z',100,60,5,10),tool('text(await tools.write_stdin({session_id:1,chars:""}))'),
+                   tool('text(await tools.clock__curr_time({}))'),token_count('2026-11-19T00:00:03Z',250,180,12,11)])
         self.assertIsNone(U.worker_summary(j))  # no turn.completed: nothing in agent.stdout
         self.assertEqual(U.collect_codex_rollout(j),j/'codex_rollout.jsonl')
         self.assertFalse(src.exists())  # later workers cannot find it in ~/.codex/sessions
         u=U.worker_summary(j)
         self.assertEqual((u['source'],u['calls'],u['in'],u['cr'],u['out'],u['peak_ctx']),('codex-rollout',2,70,180,12,150))
+        self.assertEqual((u['waits'],u['clock_checks']),(1,1))
         self.assertEqual(u['limits'],[{'window':'five_hour','resets_at':100,'first':10,'last':11}])
         self.assertEqual(U.last_message(j),'hi')
 

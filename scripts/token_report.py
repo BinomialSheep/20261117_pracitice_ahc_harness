@@ -148,8 +148,9 @@ def main():
             if j["round"] == rid:
                 u = j["usage"]
                 head = f"{j['job']:<5}{j['engine'] or '?':<8}{j['outcome'] or '':<9}{j['minutes']:>6}分 "
+                waits = f" 待つだけ={u['waits']} 時刻={u['clock_checks']}" if u and "waits" in u else ""
                 print(head + (f"calls={u['calls'] or '-'} " + " ".join(f"{k}={fmt(u[k])}" for k in KEYS)
-                              + f" ctx={fmt(u['peak_ctx'])}" if u else "記録なし"))
+                              + f" ctx={fmt(u['peak_ctx'])}{waits}" if u else "記録なし"))
     else:
         print_table(rs, info, rows, notes, legend)
 

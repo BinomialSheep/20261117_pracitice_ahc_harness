@@ -117,6 +117,8 @@ def _task_text(mode,job,deadline_minutes,debug_seeds):
 ## 実行予算と禁止事項
 - このworkerの上限は **{deadline_minutes:g}分**。時間を使い切る必要はない。
 - **{seed_info}での動作確認のみ**。`python3 quickcheck.py --seed 0` が用意されている。許可seed: {debug_seeds}。
+- `quickcheck.py` は得点、実行時間（`elapsed_sec`）、このworkerの残り時間（`remaining_min`）を出す。
+- コンパイルや `quickcheck.py` は10秒以上かかることがある。途中で戻らず、終わるまで1回で待つ（Codex の `exec_command` では `yield_time_ms` を 30000 にする）。途中で戻ると、結果を取りに行く呼び出しが増える。
 - 採点は `quickcheck.py` だけで行う。公式ツール（`problem/tools/` の gen・tester・vis・score_case.py）や `problem/tools/in/` の入力を直接使って、許可seed以外を試さない。
 - **1000ケースの性能評価、大量のシード生成、並列ベンチ、長時間学習はしない**。それらは全worker完了後にオーケストレーターが順番・同条件で実施する。
 - 他workerや親プロジェクトのファイルは変更せず、このworkspaceの中だけを編集する。
@@ -229,6 +231,9 @@ def _worker(root,rid,jid,command,minutes,engine=None):
                 return {'id':jid,'status':job['status']}
             job.update(status='running',worker_started_at=now(),engine=engine,**_engine_settings(command))
             write_json(jdir/'job.json',job)
+            # quickcheck prints the remaining time, so the worker needs no calls just to read the clock.
+            cfg=w/'worker_config.json'
+            if cfg.is_file():write_json(cfg,{**read_json(cfg),'deadline_epoch':round(time.time()+minutes*60)})
             env=os.environ.copy()
             # Retain user's CLI authentication, but clamp common library oversubscription.
             for name in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','RAYON_NUM_THREADS','CARGO_BUILD_JOBS'):

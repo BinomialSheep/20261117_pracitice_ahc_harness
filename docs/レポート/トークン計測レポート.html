@@ -331,7 +331,7 @@ tr.total td { border-top: 2px solid var(--border); }
 </tbody></table></div>
 
 <h2 id="prompt">5. 考察：渡す情報とプロンプトで減らせるか</h2>
-<div class="note"><b>結論：</b>減らせる。いちばん効くのは、渡す情報の量より、呼び出しの回数を減らす指示。worker の消費の約2割は、1行の指示で無くせる見込み。</div>
+<div class="note"><b>結論：</b>減らせる。いちばん効くのは、渡す情報の量より、呼び出しの回数を減らす指示。worker の消費の約2割は、1行の指示で無くせる見込み。下の表の上の2つは、R0013 から入れた（<a href="#next">7章</a>）。</div>
 <div class="table-wrap"><table>
 <thead><tr><th>手段</th><th>減る見込み（Codex の5時間枠の消費に対して）</th><th>質への影響</th><th>変える場所</th></tr></thead>
 <tbody>
@@ -364,8 +364,8 @@ tr.total td { border-top: 2px solid var(--border); }
 <p>効果は、次のラウンドからの記録で確かめる。見る数値も書いておく。</p>
 <ol class="plain">
   <li><span class="chip good">済み</span> <b>オーケストレーターをラウンドごとに新しいセッションで始める。</b>R0012 で、1回あたりの文脈が54万から9.5万に下がった。</li>
-  <li><b>長いコマンドを1回で待たせる（Codex の worker）。</b>見込みは5時間枠の消費の約22%。見る数値：待つだけの呼び出しの回数、A の1ラウンドの5時間枠の増分（R0012 は45ポイント）。</li>
-  <li><b>quickcheck が実行時間と残り時間も出す。</b>見る数値：時刻を確かめる呼び出しの回数。</li>
+  <li><span class="chip a">R0013 から</span> <b>長いコマンドを1回で待たせる（Codex の worker）。</b>task.md に1行足した。見込みは5時間枠の消費の約22%。見る数値：待つだけの呼び出しの回数、A の1ラウンドの5時間枠の増分（R0012 は45ポイント）。</li>
+  <li><span class="chip a">R0013 から</span> <b>quickcheck が実行時間と残り時間も出す。</b>run-workers が起動時に締め切りを <code>worker_config.json</code> に書き、quickcheck がそこから残り時間を出す。見る数値：時刻を確かめる呼び出しの回数。</li>
   <li><b>長い待ちのあとは、新しいセッションで続ける。</b>1時間を超えて待つと、どのみち文脈全体を書き直すことになる（R0012 の close のあとも約8万を書き直した）。見る数値：キャッシュ書き込み。</li>
   <li><b>worker の effort を見直す。</b>2と3のあとで、利用枠が足りないときに検討する（6章）。見る数値：思考の出力、呼び出し回数、採用率。</li>
   <li><b>オーケストレーターの effort を見直す。</b>出力の約6割が思考。Claude の使用率を測れるようにしてから判断する。</li>
@@ -453,7 +453,7 @@ tr.total td { border-top: 2px solid var(--border); }
 <ol class="plain">
   <li><b>claude の worker</b>：<code>--output-format stream-json --verbose</code> を付けた。<code>agent.stdout</code> は、呼び出しごとの usage と利用上限の使用率を含む JSONL になる。最終メッセージは <code>agent.last_message.md</code> に書き出す。</li>
   <li><b>codex の worker</b>：<code>--ephemeral</code> を外し、念のため <code>--disable memories</code> を付けた。worker が終わると、<code>run-workers</code> がその worker のセッション記録を <code>~/.codex/sessions</code> から <code>jobs/&lt;id&gt;/codex_rollout.jsonl</code> へ移す。止められた worker も、そこまでの呼び出しごとのトークンと使用率が残る。</li>
-  <li><b>job.json</b>：engine・モデル・effort と、トークンの要約（<code>usage</code>：呼び出し回数、各区分、最大の文脈、使用率の始めと終わり）を書く。</li>
+  <li><b>job.json</b>：engine・モデル・effort と、トークンの要約（<code>usage</code>：呼び出し回数、各区分、最大の文脈、使用率の始めと終わり）を書く。codex は、待つだけの呼び出し（<code>waits</code>）と時刻を見るだけの呼び出し（<code>clock_checks</code>）の回数も書く（R0013 から。<code>--jobs</code> にも出る）。</li>
   <li><b>close</b>：ラウンドの消費（対話セッション、worker、使用率）を <code>runs/R####/usage.json</code> に書く。</li>
   <li><b>対話セッションの割り当て</b>：時刻だけで割り当てると、ラウンド中の別の作業（このレポートの作業など）や、ラウンドの合間の作業が混ざる。そこで、コマンドを実行したセッションとターンで割り当てる（2章）。<code>usage.json</code> は close のときに書き、close のあとの報告を含めるため、次のラウンドの close のときに確定する。</li>
   <li><b>使用率の期間</b>：Codex の <code>resets_at</code> は、同じ期間でも読み取りごとに1秒ずれる。2分以内のずれは同じ期間として扱う（R0012 のあとで直した）。</li>

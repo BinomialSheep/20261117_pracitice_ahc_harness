@@ -125,7 +125,7 @@ def claude_calls(path):
 def codex_calls(path):
     """[(time, usage)] per model call of a codex rollout (differences of the cumulative token_count),
     session metadata (with turns and harness commands), and limit observations."""
-    calls,limits,prev,meta=[],[],None,{'turns':[],'cmds':[]}
+    calls,limits,prev,meta=[],[],None,{'turns':[],'cmds':[],'waits':0,'clock_checks':0}
     for d in lines(path):
         p=d.get('payload') if isinstance(d.get('payload'),dict) else {};t=d.get('timestamp')
         if d.get('type')=='session_meta':
@@ -135,6 +135,10 @@ def codex_calls(path):
             meta['turns'][-1]=(meta['turns'][-1][0],' '.join(str(p.get('message','')).split())[:60])
         if d.get('type')=='response_item' and p.get('type') not in ('message','reasoning','additional_tools'):
             meta['cmds']+=_commands(json.dumps(p,ensure_ascii=False),parse_ts(t))
+        if d.get('type')=='response_item' and p.get('type') in ('custom_tool_call','function_call'):
+            # calls spent only on waiting for a running command or reading the clock: each re-reads the context
+            text=f"{p.get('name','')} {p.get('input') or p.get('arguments') or ''}"
+            meta['waits']+='write_stdin' in text;meta['clock_checks']+='curr_time' in text
         if p.get('type')!='token_count':continue
         meta['last']=t
         limits+=_codex_limits(p.get('rate_limits'))
@@ -164,9 +168,10 @@ def collect_codex_rollout(jdir):
 def worker_summary(jdir):
     """Usage of one worker from its own logs, or None when the logs hold none (claude text output)."""
     jdir=Path(jdir);rollout=jdir/'codex_rollout.jsonl';out=jdir/'agent.stdout'
-    calls,limits,source=[],[],None
+    calls,limits,source,extra=[],[],None,{}
     if rollout.exists():
-        calls,_,limits=codex_calls(rollout);calls=[u for _,u in calls];source='codex-rollout'
+        calls,meta,limits=codex_calls(rollout);calls=[u for _,u in calls];source='codex-rollout'
+        extra={'waits':meta['waits'],'clock_checks':meta['clock_checks']}
     elif out.exists():
         seen,turns=set(),[]
         for d in lines(out):
@@ -180,7 +185,7 @@ def worker_summary(jdir):
     if source is None:return None
     if source=='codex-turns':  # only totals per turn: no call count, no context size
         return {'source':source,'calls':None,**{k:sum(u[k] for u in turns) for k in KEYS},'peak_ctx':None,'limits':[]}
-    return {'source':source,**total(calls),'limits':limit_spans(limits)}
+    return {'source':source,**total(calls),**extra,'limits':limit_spans(limits)}
 
 def last_message(jdir):
     """Final agent message from a JSON event log (claude stream-json or codex --json); None for plain text."""

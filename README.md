@@ -44,7 +44,7 @@ https://www.youtube.com/watch?v=8HT49Qb9dYA
 | `scripts/token_report.py`, `thin/usage.py` | トークン使用量をラウンド別・発生源別に集計する（読み取りだけ）。worker ごとの記録と、close 時の `runs/R####/usage.json` も `thin/usage.py` が作る |
 | `tests/test_problem.py`                                                                               | judgeアダプタとハーネス接続のテスト                                                                                                                                                                                                                                                                                                                                                                                     |
 | `docs/TEMPLATE_FEEDBACK.md`                                                                           | 雛形作成担当に渡す、問題によらないフィードバック                                                                                                                                                                                                                                                                                                                                                                        |
-| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から）。codex が親ディレクトリの `AGENTS.md` を読みにいくので、各作業場所に短い `AGENTS.md` を置き、task.md に外を読まない1行を足した（R0009から）。トークンを記録するため `thin/usage.py` を足し、`thin/core.py` の worker 終了時と close に記録を加えた（R0012から） |
+| `thin/`, `scripts/quickcheck.py`, `tests/test_thin.py`, `docs/` の他の文書, `examples/`, `templates/` | ハーネス本体。評価をケース単位で並列化するため、`thin/scoring.py`・`thin/config.py`・`tests/test_thin.py` を変更した（R0003から）。コマンドを制限できない codex の worker のため、`thin/core.py` の task.md に「採点は quickcheck.py だけで行う」の1行を足した（R0007から）。codex が親ディレクトリの `AGENTS.md` を読みにいくので、各作業場所に短い `AGENTS.md` を置き、task.md に外を読まない1行を足した（R0009から）。トークンを記録するため `thin/usage.py` を足し、`thin/core.py` の worker 終了時と close に記録を加えた（R0012から）。codex の worker が10秒ほどかかる quickcheck を1秒ごとに見に行き、結果を取りに行くだけの呼び出しが5時間枠の消費の約2割を占めたので、task.md に長いコマンドを1回で待つ1行を足し、`scripts/quickcheck.py` が実行時間と残り時間（run-workers が `worker_config.json` に書く締め切りから）を出すようにした（R0013から） |
 | `FILE_MANIFEST.json`                                                                                  | ハーネス v0.1.0 配布時のハッシュ一覧。展開後の変更は反映していない                                                                                                                                                                                                                                                                                                                                                      |
 | `runs/`, `best/`                                                                                      | ラウンド実行時に作られる（Git管理外）                                                                                                                                                                                                                                                                                                                                                                                   |
 
@@ -122,7 +122,7 @@ python3 scripts/codex_limits.py                  # 5時間枠と週間枠の使�
 
 R0012 から、どちらの engine でも worker のトークンが呼び出しごとに残る。
 
-- `job.json`：engine・モデル・effort と `usage`（呼び出し回数、区分ごとのトークン、最大の文脈、利用上限の使用率の始めと終わり）
+- `job.json`：engine・モデル・effort と `usage`（呼び出し回数、区分ごとのトークン、最大の文脈、利用上限の使用率の始めと終わり。codex は、実行中のコマンドを待つだけの呼び出し `waits` と時刻を見るだけの呼び出し `clock_checks` の回数も）
 - `runs/R####/usage.json`：close のときに、そのラウンドのオーケストレーターと worker の消費を書く。`~/.claude` の記録は既定で30日で消えるため。close のあとの報告を含めるため、次のラウンドの close のときに確定する（`final`）
 - 対話セッションの呼び出しは、ラウンドの作業のときだけ、そのラウンドに数える。そのラウンドの `thin.cli` コマンドを実行したセッションで、「prepare を実行したターンの開始」から「close を実行したターンの終わり」までの呼び出しが対象。そのラウンドのために始めたセッション（それより前のラウンドを実行していないセッション）は、最初のターンから数える。それ以外（ラウンドの合間の相談、ドキュメント整備、別セッションの作業）は「ラウンド外」に数える
 - 区分は in（キャッシュなし入力）・cw（キャッシュ書き込み）・cr（キャッシュ読み出し）・out（出力、思考を含む）・think（そのうち思考）。ドル換算はしない
@@ -134,7 +134,7 @@ python3 scripts/token_report.py --outside     # ラウンド外をターンご�
 python3 scripts/token_report.py --save        # usage.json を書く（無いもの、確定していないもの）
 ```
 
-R0001〜R0011 の集計結果は [docs/レポート/トークン計測レポート.html](docs/レポート/トークン計測レポート.html) にある。
+R0001〜R0012 の集計結果と、R0012 の worker の消費の内訳は [docs/レポート/トークン計測レポート.html](docs/レポート/トークン計測レポート.html) にある。
 
 ## 進め方
 

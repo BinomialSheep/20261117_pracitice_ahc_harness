@@ -4,7 +4,7 @@ The adapter tests need the official tool binaries (scripts/build_tools.sh); they
 `simulate` re-implements the statement's rules independently, only to cross-check the adapter's reading of
 the official visualizer; the harness itself never uses it.
 """
-import json, os, random, shutil, subprocess, sys, tempfile, unittest
+import json, os, random, shutil, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -187,7 +187,15 @@ class HarnessWiring(unittest.TestCase):
             quick = subprocess.run([sys.executable, 'quickcheck.py', '--seed', '0'], cwd=w, capture_output=True,
                                    text=True, timeout=120)
             self.assertEqual(quick.returncode, 0, quick.stderr)
-            self.assertTrue(json.loads(quick.stdout)['valid'])
+            out = json.loads(quick.stdout)
+            self.assertTrue(out['valid'])
+            self.assertIn('elapsed_sec', out)
+            self.assertNotIn('remaining_min', out)  # a manual worker has no deadline
+            cfg = json.loads((w / 'worker_config.json').read_text())
+            (w / 'worker_config.json').write_text(json.dumps({**cfg, 'deadline_epoch': time.time() + 600}))
+            quick = subprocess.run([sys.executable, 'quickcheck.py', '--seed', '0'], cwd=w, capture_output=True,
+                                   text=True, timeout=120)
+            self.assertTrue(9.0 <= json.loads(quick.stdout)['remaining_min'] <= 10.0)
             self.assertTrue((w / 'judge_last' / 'vis.html').is_file())
             refused = subprocess.run([sys.executable, 'quickcheck.py', '--seed', '1000'], cwd=w, capture_output=True,
                                      text=True, timeout=60)
