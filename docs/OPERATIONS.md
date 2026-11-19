@@ -36,7 +36,7 @@ Aでは10案が必要。`kind=new`は親無し、`continue`は1本、`combine`�
 
 ## workerと評価器の責任
 
-workerは`quickcheck.py`だけを使って少数の動作確認を行う。Aはseed0しか許可しない。Bは設定された最大20のdebug seedまで。全1000seedの評価はオーケストレーターが、保存済みjudge snapshotを使って実行する。**Aの候補数を減らすことで評価の総仕事量は減るが、その判断は10個提出後のコンパイル・seed0確認に基づく。**
+workerは`quickcheck.py`だけを使って少数の動作確認を行う。Aはseed0しか許可しない。Bは設定された最大20のdebug seedまで。ただし `workers.tuning_B` を設定すると、Bのworkerは、評価のseedと重ならない調整用seedの範囲で `batchcheck.py` による多数ケースの評価とパラメータ調整（Optunaなど）ができる。同時実行数は評価と同じにする。範囲が評価のseedと重なると、`prepare` が止める。全1000seedの評価はオーケストレーターが、保存済みjudge snapshotを使って実行する。**Aの候補数を減らすことで評価の総仕事量は減るが、その判断は10個提出後のコンパイル・seed0確認に基づく。**
 
 結果は`runs/R####/result.json`。`status=ok`の候補に対して、rawの平均score・現ベストとの差・改善/悪化ケース数・探索的CIを出力する。候補を10本から選ぶ場合の選択バイアスは補正していない。次のラウンドではseedセットをずらすが、観測した結果を使っている以上、厳密なholdoutにはならない。
 

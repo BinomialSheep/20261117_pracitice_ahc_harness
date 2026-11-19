@@ -96,9 +96,28 @@ WORKSPACE_AGENTS="""# この作業場所の指示
 - この作業場所の外（親ディレクトリを含む）のファイルは読まない。上の階層の `AGENTS.md` も探さない。
 """
 
-def _task_text(mode,job,deadline_minutes,debug_seeds):
+def _tuning_text(t):
+    lo,hi=t['seed_start'],t['seed_start']+t['seed_count']-1;par=t['parallelism']
+    return f'''- 採点は `quickcheck.py` と `batchcheck.py` だけで行う。公式ツール（`problem/tools/` の gen・tester・vis・score_case.py）や `problem/tools/in/` の入力を直接使わない。
+- **このworkerは、調整用 seed {lo}〜{hi} での多数ケースの評価とパラメータ調整をしてよい**。それ以外の seed（許可seedを除く）は使わない。
+- `python3 batchcheck.py --seeds {lo}-{min(lo+199,hi)}` は、main.cpp を1回コンパイルし、指定した seed をまとめて採点して、平均点・最大実行時間・無効ケース・残り時間を出す。`--binary` で自分でビルドしたバイナリを、`--env KEY=VALUE`（複数可）でソルバーへの環境変数を渡せる。`--out FILE` で seed ごとの結果を書く。
+- 同時に走らせるケースは最大 {par}（評価と同じ条件）。`batchcheck.py` を同時に2つ以上動かさない。
+- Optuna（`python3` で `import optuna`）を使ってよい。調整用 seed を、探索に使う組と最後の確認に使う組に分け、確認の組で親と seed ごとに対で比べてから採用する。
+- 提出する `main.cpp` は環境変数に依存しないこと。調整した値は定数として書き込む。
+- 長い調整は、進み具合を標準出力ではなくファイルに書くスクリプトにして、`exec_command` で始める。待つときは、空の `write_stdin` を `yield_time_ms` 300000 で呼ぶ（最大5分待てる）。
+- 残り時間が30分を切ったら調整を止め、起動したプロセスを全て止めてから `main.cpp` を確定する。
+'''
+
+def _task_text(mode,job,deadline_minutes,debug_seeds,tuning=None):
     p='、'.join(f'parent_{i}.cpp' for i in range(1,len(job['parents'])+1))
     seed_info='seed0だけ' if mode=='A' else ('許可されたdebug seedだけ（最大20ケース）')
+    if tuning:
+        rules=_tuning_text(tuning)
+        quick=f'- 1ケースの動作確認は `python3 quickcheck.py --seed 0` でできる。許可seed: {debug_seeds}。\n'
+    else:
+        rules=('- 採点は `quickcheck.py` だけで行う。公式ツール（`problem/tools/` の gen・tester・vis・score_case.py）や `problem/tools/in/` の入力を直接使って、許可seed以外を試さない。\n'
+               '- **1000ケースの性能評価、大量のシード生成、並列ベンチ、長時間学習はしない**。それらは全worker完了後にオーケストレーターが順番・同条件で実施する。\n')
+        quick=f'- **{seed_info}での動作確認のみ**。`python3 quickcheck.py --seed 0` が用意されている。許可seed: {debug_seeds}。\n'
     return f'''# 独立したAHC改善workerの指示（{mode}）
 
 ## 目的
@@ -116,12 +135,9 @@ def _task_text(mode,job,deadline_minutes,debug_seeds):
 
 ## 実行予算と禁止事項
 - このworkerの上限は **{deadline_minutes:g}分**。時間を使い切る必要はない。
-- **{seed_info}での動作確認のみ**。`python3 quickcheck.py --seed 0` が用意されている。許可seed: {debug_seeds}。
-- `quickcheck.py` は得点、実行時間（`elapsed_sec`）、このworkerの残り時間（`remaining_min`）を出す。
+{quick}- `quickcheck.py` は得点、実行時間（`elapsed_sec`）、このworkerの残り時間（`remaining_min`）を出す。
 - コンパイルや `quickcheck.py` は10秒以上かかることがある。途中で戻らず、終わるまで1回で待つ（Codex の `exec_command` では `yield_time_ms` を 30000 にする）。途中で戻ると、結果を取りに行く呼び出しが増える。
-- 採点は `quickcheck.py` だけで行う。公式ツール（`problem/tools/` の gen・tester・vis・score_case.py）や `problem/tools/in/` の入力を直接使って、許可seed以外を試さない。
-- **1000ケースの性能評価、大量のシード生成、並列ベンチ、長時間学習はしない**。それらは全worker完了後にオーケストレーターが順番・同条件で実施する。
-- 他workerや親プロジェクトのファイルは変更せず、このworkspaceの中だけを編集する。
+{rules}- 他workerや親プロジェクトのファイルは変更せず、このworkspaceの中だけを編集する。
 - このworkspaceの外のファイル（親ディレクトリの `AGENTS.md` を含む）は読まない。
 - 公式ツールのコピーは試験用。提出ソースは一つの `main.cpp` とする。
 - 自信がなくても最後に現時点の最良コードを `main.cpp` に確定する。出力のない場合は失敗扱いになる。
@@ -139,10 +155,17 @@ def prepare(root,mode,ideas_path=None,idea_text=None):
             st=read_json(path)
             if st.get('phase')!='closed':raise ThinError(f'Previous round {path.parent.name} not closed; resume/close it first')
         ids=[int(p.name[1:]) for p in runs.iterdir() if p.is_dir() and re.fullmatch(r'R\d+',p.name)]
-        rnum=max(ids,default=0)+1;rid=f'R{rnum:04d}';rd=runs/rid;rd.mkdir()
+        rnum=max(ids,default=0)+1;rid=f'R{rnum:04d}';rd=runs/rid
         ev=config['evaluation'];start=ev['first_seed']+(rnum-1)*ev['count'];seeds=list(range(start,start+ev['count']))
         if set(seeds)&set(config['workers']['debug_seeds_A']+config['workers']['debug_seeds_B']):
             raise ThinError('Evaluation seeds overlap worker debug seeds; change first_seed')
+        # Optional: B workers may score many cases on a disjoint seed range (hyperparameter tuning).
+        tuning=config['workers'].get('tuning_B') if mode=='B' else None
+        if tuning:
+            t0=tuning['seed_start'];t1=t0+tuning['seed_count']
+            if tuning['seed_count']<1 or tuning['parallelism']<1:raise ThinError('tuning_B needs positive seed_count and parallelism')
+            if t0<start+ev['count'] and start<t1:raise ThinError('Evaluation seeds overlap tuning_B seeds; move tuning_B.seed_start')
+        rd.mkdir()
         if b:shutil.copyfile(root/'best'/'main.cpp',rd/'baseline.cpp')
         snapshot={'schema_version':1,'round_id':rid,'number':rnum,'mode':mode,'created_at':now(),
           'config':config,'seed_start':start,'seed_count':ev['count'],'best_before':b,'ideas':ideas}
@@ -164,13 +187,15 @@ def prepare(root,mode,ideas_path=None,idea_text=None):
             mini={'build':config['solver']['build'],'judge':config['judge']['command'],
                   'judge_timeout':config['judge']['timeout_sec'],
                   'allowed_seeds':config['workers'][f'debug_seeds_{mode}']}
+            if tuning:mini['tuning']={k:tuning[k] for k in ('seed_start','seed_count','parallelism')}
             write_json(w/'worker_config.json',mini)
             shutil.copyfile(Path(__file__).resolve().parents[1]/'scripts'/'quickcheck.py',w/'quickcheck.py')
+            if tuning:shutil.copyfile(Path(__file__).resolve().parents[1]/'scripts'/'batchcheck.py',w/'batchcheck.py')
             if (root/'demo_assets/fake_agent.py').exists():
                 shutil.copyfile(root/'demo_assets/fake_agent.py',w/'fake_agent.py')
                 shutil.copyfile(root/'demo_assets/toy_optimized.cpp',w/'toy_optimized.cpp')
             (w/'AGENTS.md').write_text(WORKSPACE_AGENTS,encoding='utf-8')
-            (w/'task.md').write_text(_task_text(mode,{**idea,'parents':parents},config['workers'][f'minutes_{mode}'],mini['allowed_seeds']),encoding='utf-8')
+            (w/'task.md').write_text(_task_text(mode,{**idea,'parents':parents},config['workers'][f'minutes_{mode}'],mini['allowed_seeds'],tuning),encoding='utf-8')
             job={'id':jobid,'status':'pending','idea':idea['idea'],'kind':idea['kind'],'parents':parents,'created_at':now()}
             write_json(jdir/'job.json',job)
             # Independent git repository with no parent history, so codex exec can operate from this cwd.

@@ -157,6 +157,37 @@ class ThinHarness(unittest.TestCase):
             p=execute([sys.executable,'-c','import time;time.sleep(10)'],td,.05)
             self.assertEqual(p['status'],'timeout')
 
+class TuningB(unittest.TestCase):
+    """Optional workers.tuning_B: a B worker may batch-score a disjoint seed range (hyperparameter tuning)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp=tempfile.TemporaryDirectory(prefix='AHC thin - tuning ')
+        cls.root=Path(cls.tmp.name)/'toy';demo(cls.root)
+    @classmethod
+    def tearDownClass(cls):cls.tmp.cleanup()
+    def _set_tuning(self,start):
+        c=read_json(self.root/'config.json');c['workers']['tuning_B']={'seed_start':start,'seed_count':50,'parallelism':2}
+        write_json(self.root/'config.json',c)
+    def test_task_text_without_tuning_keeps_the_ban(self):
+        t=C._task_text('B',{'idea':'x'*20,'parents':[]},120,[0])
+        self.assertIn('長時間学習はしない',t);self.assertNotIn('batchcheck',t)
+    def test_overlap_with_evaluation_seeds_is_refused_then_prepare_B(self):
+        self._set_tuning(1003)  # the toy config evaluates R0002 on seeds 1005-1009
+        with self.assertRaises(ThinError):C.prepare(self.root,'B',idea_text='tune the toy solver parameters')
+        self.assertFalse((self.root/'runs/R0002').exists())
+        self._set_tuning(500000)
+        C.prepare(self.root,'B',idea_text='tune the toy solver parameters')
+        w=self.root/'runs/R0002/jobs/B01/workspace'
+        self.assertEqual(read_json(w/'worker_config.json')['tuning']['seed_start'],500000)
+        self.assertTrue((w/'batchcheck.py').exists())
+        task=(w/'task.md').read_text()
+        self.assertIn('500000-500049',task);self.assertNotIn('長時間学習はしない',task)
+        shutil.copyfile(self.root/'best/main.cpp',w/'main.cpp')
+        ok=subprocess.run([sys.executable,'batchcheck.py','--seeds','500000-500003'],cwd=w,text=True,capture_output=True,timeout=60)
+        self.assertEqual(ok.returncode,0,ok.stderr);self.assertEqual(json.loads(ok.stdout)['valid'],4)
+        bad=subprocess.run([sys.executable,'batchcheck.py','--seeds','1005'],cwd=w,text=True,capture_output=True,timeout=10)
+        self.assertNotEqual(bad.returncode,0)
+
 class ThinConfig(unittest.TestCase):
     def test_example_is_1000_and_20_120(self):
         c=read_json(ROOT/'config.example.json')
