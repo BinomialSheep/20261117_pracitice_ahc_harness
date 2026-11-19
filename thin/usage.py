@@ -67,17 +67,25 @@ def _codex_limits(rl):
         if isinstance(w,dict) and w.get('used_percent') is not None:
             yield CODEX_WINDOWS.get(w.get('window_minutes'),key),w.get('resets_at'),w['used_percent']
 
+RESET_DRIFT=120  # Codex's resets_at moves by a second between readings of the same window period
+
+def _period(keys,name,reset):
+    for n,r in keys:
+        if n==name and (r==reset or (isinstance(r,(int,float)) and isinstance(reset,(int,float)) and abs(r-reset)<=RESET_DRIFT)):
+            return n,r
+    return name,reset
+
 def limit_spans(obs):
     """[(window, resets_at, percent)] in time order -> first and last percent per window period."""
     g={}
-    for name,reset,pct in obs:g.setdefault((name,reset),[]).append(pct)
+    for name,reset,pct in obs:g.setdefault(_period(g,name,reset),[]).append(pct)
     return [{'window':n,'resets_at':r,'first':v[0],'last':v[-1]} for (n,r),v in g.items()]
 
 def merge_spans(spans):
     """Spans from parallel workers -> lowest first and highest last per window period."""
     g={}
     for s in spans:
-        k=(s['window'],s['resets_at']);x=g.setdefault(k,dict(s))
+        k=_period(g,s['window'],s['resets_at']);x=g.setdefault(k,dict(s))
         x['first']=min(x['first'],s['first']);x['last']=max(x['last'],s['last'])
     return list(g.values())
 

@@ -58,6 +58,13 @@ class Usage(unittest.TestCase):
         self.assertEqual(u['limits'],[{'window':'five_hour','resets_at':100,'first':10,'last':11}])
         self.assertEqual(U.last_message(j),'hi')
 
+    def test_resets_at_drift_is_one_window_period(self):
+        s=U.limit_spans([('five_hour',830,0),('five_hour',831,1),('five_hour',830,5),('five_hour',831,4),('five_hour',830+18000,0)])
+        self.assertEqual([(x['first'],x['last']) for x in s],[(0,4),(0,0)])
+        m=U.merge_spans([{'window':'five_hour','resets_at':830,'first':0,'last':30},{'window':'five_hour','resets_at':831,'first':24,'last':28},
+                         {'window':'seven_day','resets_at':831,'first':27,'last':27}])
+        self.assertEqual([(x['window'],x['first'],x['last']) for x in m],[('five_hour',0,30),('seven_day',27,27)])
+
     def test_codex_turns_and_plain_text(self):
         j=self.d/'a';jsonl(j/'agent.stdout',[{'type':'turn.completed','usage':{'input_tokens':500,'cached_input_tokens':400,'output_tokens':9}}])
         u=U.worker_summary(j);self.assertEqual((u['source'],u['calls'],u['in'],u['cr']),('codex-turns',None,100,400))
