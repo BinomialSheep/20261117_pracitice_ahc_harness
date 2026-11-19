@@ -174,3 +174,4 @@ ahc_thin_harness の雛形作成担当に渡す、問題によらない指摘の
   - 推論の強さを変えた engine を別名で置き、A の engine はそのままにする。
   - worker の時間切れでは worker のプロセスグループを止めるが、worker が切り離して起動した調整のプロセスは残りうる。評価の前に、残ったプロセスが無いことを確かめる（残ると評価が TLE になる）。
 - このリポジトリでは：R0014 から入れた（`config.json` の `workers.tuning_B`・`minutes_B`・`engines.codex_deep`、`thin/core.py`、`scripts/batchcheck.py`、`tests/test_thin.py` の `TuningB`）。調整用seedは 1000000〜1019999、同時実行は12。
+- R0014 の結果：worker は8時間の上限に対して49分で終えた。Optuna は30試行（各240ケース）だけで、1試行の標準誤差（約0.09）が、探したい差（0.05前後）より大きかった。task.md の共通の1行「時間を使い切る必要はない」に従ったとみる。調整を課す B では、この1行を外し、試行の数か、1試行に使うケース数の目安を課題に書く。
