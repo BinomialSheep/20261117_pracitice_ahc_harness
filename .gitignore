@@ -22,3 +22,6 @@ vis.html
 # Claude Code の個人設定（このリポジトリでの使用率の記録用フックなど）
 .claude/settings.local.json
 logs/
+
+# 考察と実験の作業場所（worker の出力を含む。報告だけを docs/レポート/ へ写す）
+lab/
