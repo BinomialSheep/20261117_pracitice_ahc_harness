@@ -18,3 +18,7 @@ problem/tools/__pycache__/
 problem/tools/bin/
 # 公式 vis が実行ディレクトリに書き出すファイル
 vis.html
+
+# Claude Code の個人設定（このリポジトリでの使用率の記録用フックなど）
+.claude/settings.local.json
+logs/
