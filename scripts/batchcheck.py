@@ -8,6 +8,8 @@ p.add_argument('--binary',help='prebuilt solver to score; default: build main.cp
 p.add_argument('--env',action='append',default=[],metavar='KEY=VALUE',help='environment for the solver (repeatable)')
 p.add_argument('--jobs',type=int,help='parallel cases (default and maximum: the configured tuning parallelism)')
 p.add_argument('--out',help='write per-seed results as JSON here')
+p.add_argument('--time-limit',type=float,help='wall-clock limit per case in seconds, at most 600, for long-run experiments (default: the evaluation limit)')
+p.add_argument('--keep',metavar='DIR',help="keep each case's input.txt, output.txt, solver_stderr.txt and summary.json in DIR/<seed>/")
 a=p.parse_args()
 w=Path(__file__).resolve().parent
 meta=json.loads((w/'worker_config.json').read_text())
@@ -30,6 +32,17 @@ if not seeds or bad:sys.exit(f'Seeds outside this worker allowance (tuning {lo}-
 jobs=min(a.jobs or tune['parallelism'],tune['parallelism'])
 if jobs<1:sys.exit('--jobs must be positive')
 env=os.environ.copy()
+judge=list(meta['judge']);judge_timeout=meta['judge_timeout']
+if a.time_limit is not None:
+    if not 0<a.time_limit<=600:sys.exit('--time-limit must be in (0, 600]')
+    if '--time-limit' in judge:
+        i=judge.index('--time-limit');base=float(judge[i+1]);judge[i+1]=str(a.time_limit)
+    else:base=2.0;judge+=['--time-limit',str(a.time_limit)]
+    judge_timeout+=max(0.0,a.time_limit-base)
+keep=Path(a.keep).resolve() if a.keep else None
+if keep:
+    keep.mkdir(parents=True,exist_ok=True)
+    if '--save-dir' not in judge:judge+=['--save-dir','{workdir}/judge_last']
 for kv in a.env:
     if '=' not in kv:sys.exit('Bad --env (need KEY=VALUE): '+kv)
     k,v=kv.split('=',1);env[k]=v
@@ -49,7 +62,11 @@ def case(seed):
     d=root/str(seed);d.mkdir(exist_ok=True)
     f={**fmt,'binary':str(binary),'seed':str(seed),'result':str(d/'result.json'),'workdir':str(d)}
     try:
-        r=subprocess.run([x.format_map(f) for x in meta['judge']],cwd=w,text=True,capture_output=True,timeout=meta['judge_timeout'],env=env)
+        r=subprocess.run([x.format_map(f) for x in judge],cwd=w,text=True,capture_output=True,timeout=judge_timeout,env=env)
+        if keep:
+            src=Path(judge[judge.index('--save-dir')+1].format_map(f));dst=keep/str(seed);dst.mkdir(exist_ok=True)
+            for name in ('input.txt','output.txt','solver_stderr.txt','summary.json'):
+                if (src/name).is_file():shutil.copyfile(src/name,dst/name)
         if r.returncode:return {'seed':seed,'valid':False,'reason':'judge process failed: '+r.stderr[-300:]}
         res=json.loads((d/'result.json').read_text());score=res.get('score')
         if res.get('status')!='ok' or res.get('valid') is not True or type(score) not in (int,float) or not math.isfinite(score):
